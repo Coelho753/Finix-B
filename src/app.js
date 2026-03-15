@@ -29,4 +29,9 @@ app.use('/api/loans', loanRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/payment-notifications', paymentNotificationRoutes);
 
+app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/content', contentRoutes);
+app.use('/api/loans', loanRoutes);
+
 module.exports = app;

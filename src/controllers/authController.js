@@ -9,7 +9,7 @@ const {
   sanitizeInput,
 } = require('../services/authService');
 
-const MEMBERSHIP_CODE = 'FINIX75345609';
+const MEMBERSHIP_CODE = 'FINIX753456**09**';
 
 async function register(req, res) {
   const cleanName = sanitizeInput(req.body?.name);
