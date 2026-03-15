@@ -1,11 +1,12 @@
 const app = require('./app');
 const env = require('./config/env');
 const connectDb = require('./config/db');
-const { seedDefaultContent } = require('./services/seedService');
+const { seedDefaultContent, seedAdminUser } = require('./services/seedService');
 
 async function bootstrap() {
   await connectDb();
   await seedDefaultContent();
+  await seedAdminUser();
   app.listen(env.port, () => {
     console.log(`Servidor rodando na porta ${env.port}`);
   });

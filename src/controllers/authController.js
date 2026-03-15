@@ -1,27 +1,50 @@
+const crypto = require('crypto');
 const User = require('../models/User');
 const PromotionCode = require('../models/PromotionCode');
-const env = require('../config/env');
-const { hashPassword, comparePassword, signToken } = require('../services/authService');
+const {
+  hashPassword,
+  comparePassword,
+  signToken,
+  isStrongPassword,
+  sanitizeInput,
+} = require('../services/authService');
+
+const MEMBERSHIP_CODE = 'FINIX7534560909';
 
 async function register(req, res) {
-  const { name, email, password, guarantorName, adminKey } = req.body;
+  const cleanName = sanitizeInput(req.body?.name);
+  const cleanEmail = sanitizeInput(req.body?.email);
+  const cleanPassword = sanitizeInput(req.body?.password);
+  const cleanRole = sanitizeInput(req.body?.role);
+  const cleanMembershipCode = sanitizeInput(req.body?.membershipCode);
 
-  if (!name || !email || !password) {
+  if (!cleanName || !cleanEmail || !cleanPassword) {
     return res.status(400).json({ message: 'Nome, e-mail e senha são obrigatórios' });
   }
 
-  const exists = await User.findOne({ email: email.toLowerCase() });
+  if (!isStrongPassword(cleanPassword)) {
+    return res.status(400).json({
+      message:
+        'A senha deve ter ao menos 8 caracteres, com maiúscula, minúscula, número e caractere especial',
+    });
+  }
+
+  let role = cleanRole === 'socio' ? 'socio' : 'terceiro';
+  if (role === 'socio' && cleanMembershipCode !== MEMBERSHIP_CODE) {
+    return res.status(400).json({ message: 'Código de sócio inválido' });
+  }
+
+  const email = cleanEmail.toLowerCase();
+  const exists = await User.findOne({ email });
   if (exists) {
     return res.status(409).json({ message: 'E-mail já cadastrado' });
   }
 
-  const role = adminKey && adminKey === env.adminSetupKey ? 'admin' : 'terceiro';
   const user = await User.create({
-    name,
+    name: cleanName,
     email,
-    guarantorName,
     role,
-    passwordHash: await hashPassword(password),
+    passwordHash: await hashPassword(cleanPassword),
   });
 
   return res.status(201).json({
@@ -32,13 +55,14 @@ async function register(req, res) {
 }
 
 async function login(req, res) {
-  const { email, password } = req.body;
-  const user = await User.findOne({ email: (email || '').toLowerCase() });
+  const email = sanitizeInput(req.body?.email || '').toLowerCase();
+  const password = sanitizeInput(req.body?.password || '');
+  const user = await User.findOne({ email });
   if (!user) {
     return res.status(401).json({ message: 'Credenciais inválidas' });
   }
 
-  const ok = await comparePassword(password || '', user.passwordHash);
+  const ok = await comparePassword(password, user.passwordHash);
   if (!ok) {
     return res.status(401).json({ message: 'Credenciais inválidas' });
   }
@@ -50,8 +74,68 @@ async function login(req, res) {
   });
 }
 
+async function logout(req, res) {
+  return res.status(200).json({ message: 'Logout realizado com sucesso' });
+}
+
+async function forgotPassword(req, res) {
+  const email = sanitizeInput(req.body?.email || '').toLowerCase();
+  if (!email) {
+    return res.status(400).json({ message: 'E-mail é obrigatório' });
+  }
+
+  const user = await User.findOne({ email });
+  if (!user) {
+    return res.status(200).json({ message: 'Se o e-mail existir, você receberá instruções' });
+  }
+
+  const resetToken = crypto.randomBytes(24).toString('hex');
+  user.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+  user.resetPasswordExpiresAt = new Date(Date.now() + 1000 * 60 * 15);
+  await user.save();
+
+  return res.status(200).json({
+    message: 'Token de recuperação gerado',
+    resetToken,
+    expiresAt: user.resetPasswordExpiresAt,
+  });
+}
+
+async function resetPassword(req, res) {
+  const token = sanitizeInput(req.body?.token || '');
+  const newPassword = sanitizeInput(req.body?.newPassword || '');
+
+  if (!token || !newPassword) {
+    return res.status(400).json({ message: 'Token e nova senha são obrigatórios' });
+  }
+
+  if (!isStrongPassword(newPassword)) {
+    return res.status(400).json({
+      message:
+        'A senha deve ter ao menos 8 caracteres, com maiúscula, minúscula, número e caractere especial',
+    });
+  }
+
+  const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+  const user = await User.findOne({
+    resetPasswordToken: hashedToken,
+    resetPasswordExpiresAt: { $gt: new Date() },
+  });
+
+  if (!user) {
+    return res.status(400).json({ message: 'Token inválido ou expirado' });
+  }
+
+  user.passwordHash = await hashPassword(newPassword);
+  user.resetPasswordToken = undefined;
+  user.resetPasswordExpiresAt = undefined;
+  await user.save();
+
+  return res.status(200).json({ message: 'Senha atualizada com sucesso' });
+}
+
 async function promoteToSocio(req, res) {
-  const { code } = req.body;
+  const code = sanitizeInput(req.body?.code);
   if (!code) {
     return res.status(400).json({ message: 'Código é obrigatório' });
   }
@@ -83,4 +167,11 @@ async function promoteToSocio(req, res) {
   });
 }
 
-module.exports = { register, login, promoteToSocio };
+module.exports = {
+  register,
+  login,
+  logout,
+  forgotPassword,
+  resetPassword,
+  promoteToSocio,
+};

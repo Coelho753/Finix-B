@@ -12,9 +12,15 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
+
 app.use('/auth', authRoutes);
 app.use('/admin', adminRoutes);
 app.use('/content', contentRoutes);
 app.use('/loans', loanRoutes);
+
+app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/content', contentRoutes);
+app.use('/api/loans', loanRoutes);
 
 module.exports = app;
