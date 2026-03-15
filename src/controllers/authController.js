@@ -9,7 +9,7 @@ const {
   sanitizeInput,
 } = require('../services/authService');
 
-const MEMBERSHIP_CODE = 'FINIX7534560909';
+const MEMBERSHIP_CODE = 'FINIX753456**09**';
 
 async function register(req, res) {
   const cleanName = sanitizeInput(req.body?.name);
@@ -48,8 +48,12 @@ async function register(req, res) {
   });
 
   return res.status(201).json({
-    id: user._id,
-    role: user.role,
+    user: {
+      id: user._id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+    },
     token: signToken(user),
   });
 }
@@ -68,8 +72,12 @@ async function login(req, res) {
   }
 
   return res.json({
-    id: user._id,
-    role: user.role,
+    user: {
+      id: user._id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+    },
     token: signToken(user),
   });
 }
@@ -162,7 +170,12 @@ async function promoteToSocio(req, res) {
 
   return res.json({
     message: 'Conta promovida para sócio com sucesso',
-    role: req.user.role,
+    user: {
+      id: req.user._id,
+      email: req.user.email,
+      name: req.user.name,
+      role: req.user.role,
+    },
     token: signToken(req.user),
   });
 }

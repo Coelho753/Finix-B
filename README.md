@@ -37,10 +37,20 @@ npm start
 - `POST /api/loans` (Bearer)
 - `GET /api/loans/report` (Bearer admin)
 
+### Transações
+- `POST /api/transactions` (Bearer)
+- `GET /api/transactions` (Bearer)
+- `PUT /api/transactions/:id` (Bearer)
+- `DELETE /api/transactions/:id` (Bearer)
+
+### Notificações de pagamento
+- `POST /api/payment-notifications` (Bearer)
+- `GET /api/payment-notifications` (Bearer)
+
 ## Regras de autenticação
 
 ### Cadastro (`POST /api/auth/register`)
-Aceita payload com:
+Aceita payload com e retorna `{ user: { id, email, name, role }, token }`:
 
 ```json
 {
@@ -48,13 +58,13 @@ Aceita payload com:
   "email": "email@finix.com",
   "password": "Senha@123",
   "role": "terceiro | socio",
-  "membershipCode": "FINIX7534560909"
+  "membershipCode": "FINIX75345609"
 }
 ```
 
 - Senha obrigatoriamente com: maiúscula, minúscula, número, caractere especial e mínimo de 8 caracteres.
 - Inputs passam por sanitização removendo: `< > " ' ; ( ) { }`.
-- Para `role: "socio"`, o `membershipCode` deve ser `FINIX7534560909`.
+- Para `role: "socio"`, o `membershipCode` deve ser `FINIX75345609`.
 
 ### Admin padrão
 Ao iniciar o servidor, caso não exista admin com `admin@finix.com`, é criado automaticamente com senha `#75345609Ef`.
