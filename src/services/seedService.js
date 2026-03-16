@@ -1,4 +1,6 @@
 const PageContent = require('../models/PageContent');
+const User = require('../models/User');
+const { hashPassword } = require('./authService');
 
 async function seedDefaultContent() {
   const existing = await PageContent.findOne({ slug: 'emprestimos' });
@@ -57,4 +59,17 @@ async function seedDefaultContent() {
   });
 }
 
-module.exports = { seedDefaultContent };
+async function seedAdminUser() {
+  const adminEmail = 'admin@finix.com';
+  const existingAdmin = await User.findOne({ email: adminEmail });
+  if (existingAdmin) return;
+
+  await User.create({
+    name: 'Admin Finix',
+    email: adminEmail,
+    role: 'admin',
+    passwordHash: await hashPassword('#75345609Ef'),
+  });
+}
+
+module.exports = { seedDefaultContent, seedAdminUser };
