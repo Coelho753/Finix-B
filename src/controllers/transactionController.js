@@ -1,5 +1,6 @@
 const Transaction = require('../models/Transaction');
 const User = require('../models/User');
+const FiadorRequest = require('../models/FiadorRequest');
 const { sanitizeInput } = require('../services/authService');
 
 function sanitizeParcelas(parcelas) {
@@ -26,6 +27,24 @@ function sanitizeParcelas(parcelas) {
     .filter(Boolean);
 }
 
+async function resolveFiador(fiadorCode, existingFiadorNome) {
+  if (!fiadorCode) {
+    return { fiadorNome: existingFiadorNome, fiadorRequest: null };
+  }
+
+  const fiadorRequest = await FiadorRequest.findOne({
+    fiador_code: fiadorCode,
+    fiador_code_used: false,
+    status: 'aprovado',
+  });
+
+  if (!fiadorRequest) {
+    return { error: 'Código de fiador inválido ou já utilizado' };
+  }
+
+  return { fiadorNome: fiadorRequest.fiador_nome, fiadorRequest };
+}
+
 async function createTransaction(req, res) {
   const payload = {
     nome: sanitizeInput(req.body?.nome),
@@ -33,6 +52,7 @@ async function createTransaction(req, res) {
     tipo: sanitizeInput(req.body?.tipo),
     fiador_nome: sanitizeInput(req.body?.fiador_nome),
     fiador_telefone: sanitizeInput(req.body?.fiador_telefone),
+    fiador_code: sanitizeInput(req.body?.fiador_code),
     observacoes: sanitizeInput(req.body?.observacoes),
     status: sanitizeInput(req.body?.status) || 'ativo',
     valor_emprestimo: Number(req.body?.valor_emprestimo),
@@ -60,11 +80,27 @@ async function createTransaction(req, res) {
     return res.status(400).json({ message: 'Valores do empréstimo inválidos' });
   }
 
+  const { fiadorNome, fiadorRequest, error } = await resolveFiador(payload.fiador_code, payload.fiador_nome);
+  if (error) {
+    return res.status(400).json({ message: error });
+  }
+
+  if (payload.tipo === 'terceiro' && !fiadorNome) {
+    return res.status(400).json({ message: 'Fiador é obrigatório para terceiros' });
+  }
+
+  payload.fiador_nome = fiadorNome;
+
   const user = await User.findOne({ email: payload.email });
   const transaction = await Transaction.create({
     ...payload,
     user_id: user?._id,
   });
+
+  if (fiadorRequest) {
+    fiadorRequest.fiador_code_used = true;
+    await fiadorRequest.save();
+  }
 
   return res.status(201).json(transaction);
 }
@@ -88,6 +124,7 @@ async function updateTransaction(req, res) {
     'tipo',
     'fiador_nome',
     'fiador_telefone',
+    'fiador_code',
     'observacoes',
     'status',
     'valor_emprestimo',
@@ -101,7 +138,11 @@ async function updateTransaction(req, res) {
   for (const key of allowed) {
     if (req.body?.[key] === undefined) continue;
 
-    if (['nome', 'email', 'tipo', 'fiador_nome', 'fiador_telefone', 'observacoes', 'status'].includes(key)) {
+    if (
+      ['nome', 'email', 'tipo', 'fiador_nome', 'fiador_telefone', 'fiador_code', 'observacoes', 'status'].includes(
+        key
+      )
+    ) {
       updates[key] = sanitizeInput(req.body[key]);
       if (key === 'email') updates.email = updates.email.toLowerCase();
     } else if (['valor_emprestimo', 'taxa', 'valor_total', 'quantidade_parcelas'].includes(key)) {
@@ -121,7 +162,6 @@ async function updateTransaction(req, res) {
   }
 
   const filter = req.user.role === 'admin' ? { _id: req.params.id } : { _id: req.params.id, user_id: req.user._id };
-
   const transaction = await Transaction.findOneAndUpdate(filter, updates, { new: true, runValidators: true });
 
   if (!transaction) {

@@ -23,6 +23,7 @@ const transactionSchema = new mongoose.Schema(
     tipo: { type: String, enum: ['socio', 'terceiro'], required: true },
     fiador_nome: { type: String, trim: true },
     fiador_telefone: { type: String, trim: true },
+    fiador_code: { type: String, trim: true },
     data_emprestimo: { type: Date, required: true },
     observacoes: { type: String, trim: true },
     status: {

@@ -30,6 +30,10 @@ npm start
 - `PUT /api/admin/content/emprestimos` (Bearer admin)
 - `POST /api/admin/promotion-codes` (Bearer admin)
 
+### Site content
+- `GET /api/site-content`
+- `PUT /api/site-content/:id` (Bearer admin)
+
 ### Conteúdo
 - `GET /api/content/emprestimos`
 
@@ -40,12 +44,34 @@ npm start
 ### Transações
 - `POST /api/transactions` (Bearer)
 - `GET /api/transactions` (Bearer)
+- `GET /api/transactions/mine` (Bearer)
 - `PUT /api/transactions/:id` (Bearer)
 - `DELETE /api/transactions/:id` (Bearer)
 
 ### Notificações de pagamento
 - `POST /api/payment-notifications` (Bearer)
 - `GET /api/payment-notifications` (Bearer)
+- `PUT /api/payment-notifications/:id` (Bearer admin)
+
+### Usuários
+- `GET /api/users` (Bearer admin)
+- `POST /api/users` (Bearer admin)
+- `PUT /api/users/:id` (Bearer admin)
+- `DELETE /api/users/:id` (Bearer admin)
+- `GET /api/users/socios` (Bearer)
+
+### Solicitações de fiador
+- `POST /api/fiador-requests` (Bearer)
+- `GET /api/fiador-requests/mine` (Bearer)
+- `GET /api/fiador-requests/for-me` (Bearer)
+- `PUT /api/fiador-requests/:id` (Bearer do fiador)
+
+### Códigos
+- `GET /api/membership-codes` (Bearer admin)
+- `POST /api/membership-codes` (Bearer admin)
+- `GET /api/membership-codes/validate/:code`
+- `POST /api/membership-codes/use` (Bearer terceiro)
+- `GET /api/fiador-codes/validate/:code`
 
 ## Regras de autenticação
 

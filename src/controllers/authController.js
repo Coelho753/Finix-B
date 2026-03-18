@@ -166,6 +166,8 @@ async function promoteToSocio(req, res) {
 
   promotion.active = false;
   promotion.usedBy = req.user._id;
+  promotion.usedByName = req.user.name;
+  promotion.usedAt = new Date();
   await promotion.save();
 
   return res.json({
