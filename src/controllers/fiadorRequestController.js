@@ -96,9 +96,23 @@ async function updateFiadorRequest(req, res) {
   return res.json(request);
 }
 
+async function deleteFiadorRequest(req, res) {
+  const filter = req.user.role === 'admin'
+    ? { _id: req.params.id }
+    : { _id: req.params.id, solicitante_id: req.user._id };
+
+  const request = await FiadorRequest.findOneAndDelete(filter);
+  if (!request) {
+    return res.status(404).json({ message: 'Solicitação de fiador não encontrada' });
+  }
+
+  return res.status(204).send();
+}
+
 module.exports = {
   createFiadorRequest,
   listMyFiadorRequests,
   listFiadorRequestsForMe,
   updateFiadorRequest,
+  deleteFiadorRequest,
 };

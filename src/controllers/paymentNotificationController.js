@@ -56,8 +56,20 @@ async function updatePaymentNotification(req, res) {
   return res.json(notification);
 }
 
+async function deletePaymentNotification(req, res) {
+  const filter = req.user.role === 'admin' ? { _id: req.params.id } : { _id: req.params.id, user_id: req.user._id };
+  const notification = await PaymentNotification.findOneAndDelete(filter);
+
+  if (!notification) {
+    return res.status(404).json({ message: 'Notificação não encontrada' });
+  }
+
+  return res.status(204).send();
+}
+
 module.exports = {
   createPaymentNotification,
   listPaymentNotifications,
   updatePaymentNotification,
+  deletePaymentNotification,
 };

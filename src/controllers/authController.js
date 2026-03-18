@@ -29,7 +29,7 @@ async function register(req, res) {
     });
   }
 
-  let role = cleanRole === 'socio' ? 'socio' : 'terceiro';
+  const role = cleanRole === 'socio' ? 'socio' : 'terceiro';
   if (role === 'socio' && cleanMembershipCode !== MEMBERSHIP_CODE) {
     return res.status(400).json({ message: 'Código de sócio inválido' });
   }
@@ -83,18 +83,19 @@ async function login(req, res) {
 }
 
 async function logout(req, res) {
-  return res.status(200).json({ message: 'Logout realizado com sucesso' });
+  return res.status(200).json({ message: 'Logout realizado com sucesso', success: true });
 }
 
 async function forgotPassword(req, res) {
   const email = sanitizeInput(req.body?.email || '').toLowerCase();
   if (!email) {
-    return res.status(400).json({ message: 'E-mail é obrigatório' });
+    return res.status(400).json({ success: false, message: 'E-mail é obrigatório' });
   }
 
+  const genericMessage = 'Se o email estiver cadastrado, você receberá instruções para redefinir a senha';
   const user = await User.findOne({ email });
   if (!user) {
-    return res.status(200).json({ message: 'Se o e-mail existir, você receberá instruções' });
+    return res.status(200).json({ success: true, message: genericMessage });
   }
 
   const resetToken = crypto.randomBytes(24).toString('hex');
@@ -103,7 +104,8 @@ async function forgotPassword(req, res) {
   await user.save();
 
   return res.status(200).json({
-    message: 'Token de recuperação gerado',
+    success: true,
+    message: genericMessage,
     resetToken,
     expiresAt: user.resetPasswordExpiresAt,
   });
@@ -111,14 +113,15 @@ async function forgotPassword(req, res) {
 
 async function resetPassword(req, res) {
   const token = sanitizeInput(req.body?.token || '');
-  const newPassword = sanitizeInput(req.body?.newPassword || '');
+  const nextPassword = sanitizeInput(req.body?.password || req.body?.newPassword || '');
 
-  if (!token || !newPassword) {
-    return res.status(400).json({ message: 'Token e nova senha são obrigatórios' });
+  if (!token || !nextPassword) {
+    return res.status(400).json({ success: false, message: 'Token e nova senha são obrigatórios' });
   }
 
-  if (!isStrongPassword(newPassword)) {
+  if (!isStrongPassword(nextPassword)) {
     return res.status(400).json({
+      success: false,
       message:
         'A senha deve ter ao menos 8 caracteres, com maiúscula, minúscula, número e caractere especial',
     });
@@ -131,15 +134,15 @@ async function resetPassword(req, res) {
   });
 
   if (!user) {
-    return res.status(400).json({ message: 'Token inválido ou expirado' });
+    return res.status(400).json({ success: false, message: 'Token inválido ou expirado' });
   }
 
-  user.passwordHash = await hashPassword(newPassword);
+  user.passwordHash = await hashPassword(nextPassword);
   user.resetPasswordToken = undefined;
   user.resetPasswordExpiresAt = undefined;
   await user.save();
 
-  return res.status(200).json({ message: 'Senha atualizada com sucesso' });
+  return res.status(200).json({ success: true, message: 'Senha atualizada com sucesso' });
 }
 
 async function promoteToSocio(req, res) {

@@ -52,6 +52,7 @@ npm start
 - `POST /api/payment-notifications` (Bearer)
 - `GET /api/payment-notifications` (Bearer)
 - `PUT /api/payment-notifications/:id` (Bearer admin)
+- `DELETE /api/payment-notifications/:id` (Bearer)
 
 ### Usuários
 - `GET /api/users` (Bearer admin)
@@ -65,6 +66,7 @@ npm start
 - `GET /api/fiador-requests/mine` (Bearer)
 - `GET /api/fiador-requests/for-me` (Bearer)
 - `PUT /api/fiador-requests/:id` (Bearer do fiador)
+- `DELETE /api/fiador-requests/:id` (Bearer)
 
 ### Códigos
 - `GET /api/membership-codes` (Bearer admin)
@@ -72,6 +74,7 @@ npm start
 - `GET /api/membership-codes/validate/:code`
 - `POST /api/membership-codes/use` (Bearer terceiro)
 - `GET /api/fiador-codes/validate/:code`
+- `POST /api/fiador-codes/consume`
 
 ## Regras de autenticação
 
