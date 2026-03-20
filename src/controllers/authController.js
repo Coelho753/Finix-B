@@ -8,6 +8,7 @@ const {
   isStrongPassword,
   sanitizeInput,
 } = require('../services/authService');
+const { sendPasswordResetEmail } = require('../services/emailService');
 
 const MEMBERSHIP_CODE = 'FINIX75345609';
 
@@ -103,10 +104,29 @@ async function forgotPassword(req, res) {
   user.resetPasswordExpiresAt = new Date(Date.now() + 1000 * 60 * 15);
   await user.save();
 
+  try {
+    await sendPasswordResetEmail({
+      to: user.email,
+      name: user.name,
+      token: resetToken,
+    });
+  } catch (error) {
+    if (error.code === 'EMAIL_NOT_CONFIGURED') {
+      return res.status(503).json({
+        success: false,
+        message: 'Serviço de e-mail não configurado no backend. Configure RESEND_API_KEY, EMAIL_FROM e PASSWORD_RESET_URL_BASE no Render.',
+      });
+    }
+
+    return res.status(502).json({
+      success: false,
+      message: 'Não foi possível enviar o e-mail de recuperação no momento.',
+    });
+  }
+
   return res.status(200).json({
     success: true,
     message: genericMessage,
-    resetToken,
     expiresAt: user.resetPasswordExpiresAt,
   });
 }

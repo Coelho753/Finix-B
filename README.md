@@ -125,3 +125,16 @@ Ao iniciar o servidor, caso não exista admin com `admin@finix.com`, é criado a
 - Média e moda do valor solicitado.
 - Média e moda do valor total.
 - `graficoMensalValoresSolicitados` com `labels` e `values`.
+
+
+## Recuperação de senha no Render
+Para que `POST /api/auth/forgot-password` envie e-mail de verdade, configure estas variáveis no Render:
+
+- `RESEND_API_KEY`
+- `EMAIL_FROM`
+- `PASSWORD_RESET_URL_BASE`
+
+Exemplo de `PASSWORD_RESET_URL_BASE`:
+- `https://seu-frontend.com/reset-password`
+
+Quando configurado, o backend envia o e-mail via Resend com link e token de recuperação.
