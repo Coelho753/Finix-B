@@ -12,6 +12,7 @@ const userRoutes = require('./routes/userRoutes');
 const fiadorRequestRoutes = require('./routes/fiadorRequestRoutes');
 const membershipCodeRoutes = require('./routes/membershipCodeRoutes');
 const fiadorCodeRoutes = require('./routes/fiadorCodeRoutes');
+const financeRoutes = require('./routes/financeRoutes');
 
 const app = express();
 
@@ -31,6 +32,7 @@ app.use('/fiador-requests', fiadorRequestRoutes);
 app.use('/site-content', siteContentRoutes);
 app.use('/membership-codes', membershipCodeRoutes);
 app.use('/fiador-codes', fiadorCodeRoutes);
+app.use('/finance', financeRoutes);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
@@ -43,5 +45,6 @@ app.use('/api/fiador-requests', fiadorRequestRoutes);
 app.use('/api/site-content', siteContentRoutes);
 app.use('/api/membership-codes', membershipCodeRoutes);
 app.use('/api/fiador-codes', fiadorCodeRoutes);
+app.use('/api/finance', financeRoutes);
 
 module.exports = app;

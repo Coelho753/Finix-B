@@ -76,6 +76,15 @@ npm start
 - `GET /api/fiador-codes/validate/:code`
 - `POST /api/fiador-codes/consume`
 
+<<<<<<< codex/implement-backend-authentication-routes-x5fvpv
+### Financeiro
+- `GET /api/finance/fund-data` (Bearer admin)
+- `PUT /api/finance/fund-data` (Bearer admin)
+- `GET /api/finance/dashboard` (Bearer admin)
+- `GET /api/finance/my-summary` (Bearer sócio)
+
+=======
+>>>>>>> main
 ## Regras de autenticação
 
 ### Cadastro (`POST /api/auth/register`)
@@ -125,3 +134,28 @@ Ao iniciar o servidor, caso não exista admin com `admin@finix.com`, é criado a
 - Média e moda do valor solicitado.
 - Média e moda do valor total.
 - `graficoMensalValoresSolicitados` com `labels` e `values`.
+
+
+## Recuperação de senha no Render
+Para que `POST /api/auth/forgot-password` envie e-mail de verdade, configure estas variáveis no Render:
+
+- `RESEND_API_KEY`
+- `EMAIL_FROM`
+- `PASSWORD_RESET_URL_BASE`
+
+Exemplo de `PASSWORD_RESET_URL_BASE`:
+- `https://seu-frontend.com/reset-password`
+
+Quando configurado, o backend envia o e-mail via Resend com link e token de recuperação.
+
+
+## Financeiro administrativo
+O endpoint `GET /api/finance/dashboard` retorna:
+
+- `funds`: dados editáveis dos fundos F1/F2.
+- `aportes_por_socio`: meses pagos e total aportado por cada sócio.
+- `discriminacao_taxas`: linhas por empréstimo com juros, Finix (3%), fiador (5% para terceiros), grupo, parcelas pagas e dívida restante.
+- `receita_por_periodo`: resumo F1 (sócios) vs F2 (terceiros) com receita bruta e líquida.
+- `lucro_estimado_por_socio`: divisão igualitária do lucro líquido do grupo entre os sócios.
+
+O endpoint `GET /api/finance/my-summary` retorna o card financeiro do sócio logado com total aportado, meses pagos e lista de meses.
