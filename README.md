@@ -76,12 +76,15 @@ npm start
 - `GET /api/fiador-codes/validate/:code`
 - `POST /api/fiador-codes/consume`
 
+<<<<<<< codex/implement-backend-authentication-routes-x5fvpv
 ### Financeiro
 - `GET /api/finance/fund-data` (Bearer admin)
 - `PUT /api/finance/fund-data` (Bearer admin)
 - `GET /api/finance/dashboard` (Bearer admin)
 - `GET /api/finance/my-summary` (Bearer sócio)
 
+=======
+>>>>>>> main
 ## Regras de autenticação
 
 ### Cadastro (`POST /api/auth/register`)
