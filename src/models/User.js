@@ -10,7 +10,10 @@ const userSchema = new mongoose.Schema(
       enum: ['terceiro', 'socio', 'admin'],
       default: 'terceiro',
     },
+    titulo: { type: String, trim: true },
     guarantorName: { type: String },
+    resetPasswordToken: { type: String },
+    resetPasswordExpiresAt: { type: Date },
   },
   { timestamps: true }
 );
