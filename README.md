@@ -76,14 +76,13 @@ npm start
 - `GET /api/fiador-codes/validate/:code`
 - `POST /api/fiador-codes/consume`
 
-<<<<<<< codex/implement-backend-authentication-routes-x5fvpv
 ### Financeiro
 - `GET /api/finance/fund-data` (Bearer admin)
 - `PUT /api/finance/fund-data` (Bearer admin)
 - `GET /api/finance/dashboard` (Bearer admin)
+- `GET /api/finance/history` (Bearer admin)
 - `GET /api/finance/my-summary` (Bearer sócio)
 
-=======
 >>>>>>> main
 ## Regras de autenticação
 
@@ -159,3 +158,23 @@ O endpoint `GET /api/finance/dashboard` retorna:
 - `lucro_estimado_por_socio`: divisão igualitária do lucro líquido do grupo entre os sócios.
 
 O endpoint `GET /api/finance/my-summary` retorna o card financeiro do sócio logado com total aportado, meses pagos e lista de meses.
+
+
+## Campos adicionais de transação
+O modelo de transação agora aceita também:
+
+- `modalidade`: `parcelado` ou `30dias`
+- `desistencia`: booleano
+- `fiador_assumiu`: booleano
+- `is_unregistered`: booleano
+- `status`: inclui `desistente`
+- `dia_vencimento`: número opcional
+- `parcelas[].data_vencimento`: data opcional para alertas de atraso
+
+O dashboard financeiro também inclui:
+
+- `alertas_fiador_em_atraso`
+- `historico_geral`
+- `rendimento_por_socio`
+
+A discriminação visível de taxas não expõe mais a parte do fiador nas tabelas retornadas pela API.
