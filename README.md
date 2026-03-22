@@ -178,3 +178,7 @@ O dashboard financeiro também inclui:
 - `rendimento_por_socio`
 
 A discriminação visível de taxas não expõe mais a parte do fiador nas tabelas retornadas pela API.
+
+
+## Usuários administrativos
+O modelo `User` também aceita o campo opcional `titulo` para persistir cargos como `Dir. Executivo`, `Dir. de Negócios` e `Dir. Financeiro`.
