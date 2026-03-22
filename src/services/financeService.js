@@ -33,10 +33,10 @@ function calculateTaxBreakdown(transaction) {
   const parcelas = Array.isArray(transaction.parcelas) ? transaction.parcelas : [];
   const jurosTotal = Number((transaction.valor_total - transaction.valor_emprestimo).toFixed(2));
   const parteFinix = Number((transaction.valor_emprestimo * 0.03).toFixed(2));
-  const parteFiador = transaction.tipo === 'terceiro'
+  const custoFiadorInterno = transaction.tipo === 'terceiro'
     ? Number((transaction.valor_emprestimo * 0.05).toFixed(2))
     : 0;
-  const parteGrupo = Number((jurosTotal - parteFinix - parteFiador).toFixed(2));
+  const parteGrupo = Number((jurosTotal - parteFinix - custoFiadorInterno).toFixed(2));
   const parcelasPagas = parcelas.filter((parcela) => parcela.paga).length;
   const dividaRestante = Number(
     parcelas
@@ -52,28 +52,24 @@ function calculateTaxBreakdown(transaction) {
     transaction_id: transaction._id,
     nome: transaction.nome,
     tipo: transaction.tipo,
+    modalidade: transaction.modalidade,
     valor: transaction.valor_emprestimo,
     taxa: transaction.taxa,
     juros_total: jurosTotal,
     parte_finix: parteFinix,
-    parte_fiador: parteFiador,
     parte_grupo: parteGrupo,
     parcela: valorParcela,
     fiador: transaction.fiador_nome || null,
     parcelas_pagas: parcelasPagas,
     quantidade_parcelas: transaction.quantidade_parcelas,
     divida_restante: dividaRestante,
+    status: transaction.status,
+    desistencia: Boolean(transaction.desistencia),
+    fiador_assumiu: Boolean(transaction.fiador_assumiu),
   };
 }
 
-async function buildFinanceSummary() {
-  const [fundData, transactions, socios, confirmedContributions] = await Promise.all([
-    getFundData(),
-    Transaction.find({}).sort({ created_at: -1 }),
-    User.find({ role: 'socio' }, 'name email role').sort({ name: 1 }),
-    PaymentNotification.find({ status: 'confirmado' }).sort({ created_at: -1 }),
-  ]);
-
+function buildContributionRows(socios, confirmedNotifications) {
   const socioIds = new Set(socios.map((user) => String(user._id)));
   const contributionRows = new Map(
     socios.map((user) => [String(user._id), {
@@ -86,7 +82,7 @@ async function buildFinanceSummary() {
     }])
   );
 
-  for (const notification of confirmedContributions) {
+  for (const notification of confirmedNotifications) {
     if (!socioIds.has(String(notification.user_id))) continue;
     if (notification.transaction_id || notification.parcela_numero) continue;
 
@@ -98,12 +94,94 @@ async function buildFinanceSummary() {
     row.quantidade_meses_pagos += 1;
   }
 
+  return Array.from(contributionRows.values());
+}
+
+function buildOverdueFiadorAlerts(transactions) {
+  const now = new Date();
+  return transactions.flatMap((transaction) => {
+    if (!transaction.fiador_nome) return [];
+
+    const overdueParcelas = (transaction.parcelas || []).filter((parcela) => {
+      if (parcela.paga || !parcela.data_vencimento) return false;
+      return new Date(parcela.data_vencimento) < now;
+    });
+
+    if (overdueParcelas.length === 0) return [];
+
+    return [{
+      transaction_id: transaction._id,
+      nome: transaction.nome,
+      fiador: transaction.fiador_nome,
+      status: transaction.status,
+      parcelas_vencidas: overdueParcelas.length,
+      valor_em_atraso: Number(overdueParcelas.reduce((sum, parcela) => sum + parcela.valor, 0).toFixed(2)),
+    }];
+  });
+}
+
+function buildHistoryRows(transactions, notifications) {
+  const paymentRows = notifications.map((notification) => ({
+    _id: notification._id,
+    tipo: notification.transaction_id ? 'pagamento' : 'aporte',
+    status: notification.status,
+    nome: notification.user_name,
+    referencia: notification.mes_referencia,
+    valor: notification.valor,
+    created_at: notification.created_at,
+    observacao: notification.mensagem || '',
+  }));
+
+  const transactionRows = transactions.flatMap((transaction) => {
+    const rows = [];
+    if (transaction.desistencia) {
+      rows.push({
+        _id: `desistencia-${transaction._id}`,
+        tipo: 'desistencia',
+        status: transaction.status,
+        nome: transaction.nome,
+        referencia: transaction.modalidade,
+        valor: transaction.divida_restante || transaction.valor_total,
+        created_at: transaction.updated_at || transaction.created_at,
+        observacao: transaction.fiador_assumiu ? 'Fiador assumiu a dívida' : 'Desistência sem transferência',
+      });
+    }
+
+    if (transaction.status === 'inadimplente') {
+      rows.push({
+        _id: `inadimplencia-${transaction._id}`,
+        tipo: 'inadimplencia',
+        status: transaction.status,
+        nome: transaction.nome,
+        referencia: transaction.modalidade,
+        valor: transaction.valor_total,
+        created_at: transaction.updated_at || transaction.created_at,
+        observacao: 'Empréstimo marcado como inadimplente',
+      });
+    }
+
+    return rows;
+  });
+
+  return [...paymentRows, ...transactionRows].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+}
+
+async function buildFinanceSummary() {
+  const [fundData, transactions, socios, notifications] = await Promise.all([
+    getFundData(),
+    Transaction.find({}).sort({ created_at: -1 }),
+    User.find({ role: 'socio' }, 'name email role').sort({ name: 1 }),
+    PaymentNotification.find({}).sort({ created_at: -1 }),
+  ]);
+
+  const confirmedNotifications = notifications.filter((notification) => notification.status === 'confirmado');
+  const contributionRows = buildContributionRows(socios, confirmedNotifications);
+
   const taxBreakdown = transactions.map(calculateTaxBreakdown);
   const totals = taxBreakdown.reduce((acc, row) => ({
     valor: acc.valor + row.valor,
     juros_total: acc.juros_total + row.juros_total,
     parte_finix: acc.parte_finix + row.parte_finix,
-    parte_fiador: acc.parte_fiador + row.parte_fiador,
     parte_grupo: acc.parte_grupo + row.parte_grupo,
     parcela: acc.parcela + row.parcela,
     parcelas_pagas: acc.parcelas_pagas + row.parcelas_pagas,
@@ -112,7 +190,6 @@ async function buildFinanceSummary() {
     valor: 0,
     juros_total: 0,
     parte_finix: 0,
-    parte_fiador: 0,
     parte_grupo: 0,
     parcela: 0,
     parcelas_pagas: 0,
@@ -136,9 +213,16 @@ async function buildFinanceSummary() {
     ? Number((lucroTotalGrupo / socios.length).toFixed(2))
     : 0;
 
+  const rendimentoPorSocio = contributionRows.map((row) => ({
+    ...row,
+    lucro_estimado: lucroEstimadoPorSocio,
+    saldo_estimado: Number((row.total_aportado + lucroEstimadoPorSocio).toFixed(2)),
+  }));
+
   return {
     funds: fundData,
-    aportes_por_socio: Array.from(contributionRows.values()),
+    aportes_por_socio: contributionRows,
+    rendimento_por_socio: rendimentoPorSocio,
     discriminacao_taxas: {
       linhas: taxBreakdown,
       totais: Object.fromEntries(Object.entries(totals).map(([key, value]) => [key, Number(value.toFixed(2))])),
@@ -150,13 +234,16 @@ async function buildFinanceSummary() {
       lucro_por_socio: lucroEstimadoPorSocio,
       retorno_total: Number((lucroEstimadoPorSocio * socios.length).toFixed(2)),
     },
+    alertas_fiador_em_atraso: buildOverdueFiadorAlerts(transactions),
+    historico_geral: buildHistoryRows(transactions, notifications),
   };
 }
 
 async function getSocioFinancialSummary(userId) {
-  const [user, notifications] = await Promise.all([
+  const [user, notifications, summary] = await Promise.all([
     User.findById(userId, 'name email role'),
     PaymentNotification.find({ user_id: userId, status: 'confirmado' }).sort({ created_at: -1 }),
+    buildFinanceSummary(),
   ]);
 
   if (!user || user.role !== 'socio') {
@@ -175,7 +262,23 @@ async function getSocioFinancialSummary(userId) {
     ),
     quantidade_meses_pagos: contributionNotifications.length,
     meses_pagos: contributionNotifications.map((notification) => notification.mes_referencia),
+    lucro_estimado: summary.lucro_estimado_por_socio.lucro_por_socio,
+    saldo_estimado: Number(
+      (
+        contributionNotifications.reduce((total, notification) => total + notification.valor, 0) +
+        summary.lucro_estimado_por_socio.lucro_por_socio
+      ).toFixed(2)
+    ),
   };
+}
+
+async function getGeneralHistory() {
+  const [transactions, notifications] = await Promise.all([
+    Transaction.find({}).sort({ created_at: -1 }),
+    PaymentNotification.find({}).sort({ created_at: -1 }),
+  ]);
+
+  return buildHistoryRows(transactions, notifications);
 }
 
 module.exports = {
@@ -184,4 +287,5 @@ module.exports = {
   calculateTaxBreakdown,
   buildFinanceSummary,
   getSocioFinancialSummary,
+  getGeneralHistory,
 };
