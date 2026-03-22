@@ -3,6 +3,7 @@ const {
   saveFundData,
   buildFinanceSummary,
   getSocioFinancialSummary,
+  getGeneralHistory,
 } = require('../services/financeService');
 
 async function getFunds(req, res) {
@@ -32,6 +33,15 @@ async function getFinanceDashboard(req, res) {
   return res.json(summary);
 }
 
+async function getFinanceHistory(req, res) {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Sem permissão' });
+  }
+
+  const history = await getGeneralHistory();
+  return res.json(history);
+}
+
 async function getMyFinancialSummary(req, res) {
   const summary = await getSocioFinancialSummary(req.user._id);
   if (!summary) {
@@ -45,5 +55,6 @@ module.exports = {
   getFunds,
   updateFunds,
   getFinanceDashboard,
+  getFinanceHistory,
   getMyFinancialSummary,
 };
