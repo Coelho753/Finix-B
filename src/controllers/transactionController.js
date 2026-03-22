@@ -12,6 +12,7 @@ function sanitizeParcelas(parcelas) {
       const valor = Number(parcela?.valor);
       const paga = Boolean(parcela?.paga);
       const dataPagamento = parcela?.data_pagamento ? new Date(parcela.data_pagamento) : undefined;
+      const dataVencimento = parcela?.data_vencimento ? new Date(parcela.data_vencimento) : undefined;
 
       if (!Number.isFinite(numero) || numero <= 0 || !Number.isFinite(valor) || valor <= 0) {
         return null;
@@ -22,6 +23,7 @@ function sanitizeParcelas(parcelas) {
         valor,
         paga,
         data_pagamento: dataPagamento && !Number.isNaN(dataPagamento.getTime()) ? dataPagamento : undefined,
+        data_vencimento: dataVencimento && !Number.isNaN(dataVencimento.getTime()) ? dataVencimento : undefined,
       };
     })
     .filter(Boolean);
@@ -46,25 +48,35 @@ async function resolveFiador(fiadorCode, existingFiadorNome) {
 }
 
 async function createTransaction(req, res) {
+  const rawEmail = sanitizeInput(req.body?.email || '').toLowerCase();
   const payload = {
     nome: sanitizeInput(req.body?.nome),
-    email: sanitizeInput(req.body?.email || '').toLowerCase(),
+    email: rawEmail || undefined,
+    is_unregistered: Boolean(req.body?.is_unregistered) || !rawEmail,
     tipo: sanitizeInput(req.body?.tipo),
+    modalidade: sanitizeInput(req.body?.modalidade) || 'parcelado',
     fiador_nome: sanitizeInput(req.body?.fiador_nome),
     fiador_telefone: sanitizeInput(req.body?.fiador_telefone),
     fiador_code: sanitizeInput(req.body?.fiador_code),
+    fiador_assumiu: Boolean(req.body?.fiador_assumiu),
+    desistencia: Boolean(req.body?.desistencia),
     observacoes: sanitizeInput(req.body?.observacoes),
     status: sanitizeInput(req.body?.status) || 'ativo',
     valor_emprestimo: Number(req.body?.valor_emprestimo),
     taxa: Number(req.body?.taxa),
     valor_total: Number(req.body?.valor_total),
     quantidade_parcelas: Number(req.body?.quantidade_parcelas),
+    dia_vencimento: req.body?.dia_vencimento !== undefined ? Number(req.body?.dia_vencimento) : undefined,
     data_emprestimo: new Date(req.body?.data_emprestimo),
     parcelas: sanitizeParcelas(req.body?.parcelas),
   };
 
-  if (!payload.nome || !payload.email || !['socio', 'terceiro'].includes(payload.tipo)) {
+  if (!payload.nome || !['socio', 'terceiro'].includes(payload.tipo)) {
     return res.status(400).json({ message: 'Dados obrigatórios inválidos' });
+  }
+
+  if (!['parcelado', '30dias'].includes(payload.modalidade)) {
+    return res.status(400).json({ message: 'Modalidade inválida' });
   }
 
   if (
@@ -80,6 +92,10 @@ async function createTransaction(req, res) {
     return res.status(400).json({ message: 'Valores do empréstimo inválidos' });
   }
 
+  if (!['ativo', 'quitado', 'inadimplente', 'desistente'].includes(payload.status)) {
+    return res.status(400).json({ message: 'Status inválido' });
+  }
+
   const { fiadorNome, fiadorRequest, error } = await resolveFiador(payload.fiador_code, payload.fiador_nome);
   if (error) {
     return res.status(400).json({ message: error });
@@ -91,10 +107,11 @@ async function createTransaction(req, res) {
 
   payload.fiador_nome = fiadorNome;
 
-  const user = await User.findOne({ email: payload.email });
+  const user = payload.email ? await User.findOne({ email: payload.email }) : null;
   const transaction = await Transaction.create({
     ...payload,
     user_id: user?._id,
+    email: payload.email,
   });
 
   if (fiadorRequest) {
@@ -122,15 +139,20 @@ async function updateTransaction(req, res) {
     'nome',
     'email',
     'tipo',
+    'modalidade',
     'fiador_nome',
     'fiador_telefone',
     'fiador_code',
+    'fiador_assumiu',
+    'desistencia',
+    'is_unregistered',
     'observacoes',
     'status',
     'valor_emprestimo',
     'taxa',
     'valor_total',
     'quantidade_parcelas',
+    'dia_vencimento',
     'data_emprestimo',
     'parcelas',
   ];
@@ -139,14 +161,16 @@ async function updateTransaction(req, res) {
     if (req.body?.[key] === undefined) continue;
 
     if (
-      ['nome', 'email', 'tipo', 'fiador_nome', 'fiador_telefone', 'fiador_code', 'observacoes', 'status'].includes(
+      ['nome', 'email', 'tipo', 'modalidade', 'fiador_nome', 'fiador_telefone', 'fiador_code', 'observacoes', 'status'].includes(
         key
       )
     ) {
       updates[key] = sanitizeInput(req.body[key]);
-      if (key === 'email') updates.email = updates.email.toLowerCase();
-    } else if (['valor_emprestimo', 'taxa', 'valor_total', 'quantidade_parcelas'].includes(key)) {
+      if (key === 'email') updates.email = updates.email ? updates.email.toLowerCase() : undefined;
+    } else if (['valor_emprestimo', 'taxa', 'valor_total', 'quantidade_parcelas', 'dia_vencimento'].includes(key)) {
       updates[key] = Number(req.body[key]);
+    } else if (['fiador_assumiu', 'desistencia', 'is_unregistered'].includes(key)) {
+      updates[key] = Boolean(req.body[key]);
     } else if (key === 'data_emprestimo') {
       const d = new Date(req.body[key]);
       if (Number.isNaN(d.getTime())) return res.status(400).json({ message: 'Data inválida' });
@@ -156,9 +180,25 @@ async function updateTransaction(req, res) {
     }
   }
 
+  if (updates.status && !['ativo', 'quitado', 'inadimplente', 'desistente'].includes(updates.status)) {
+    return res.status(400).json({ message: 'Status inválido' });
+  }
+
+  if (updates.modalidade && !['parcelado', '30dias'].includes(updates.modalidade)) {
+    return res.status(400).json({ message: 'Modalidade inválida' });
+  }
+
   if (updates.email) {
     const user = await User.findOne({ email: updates.email });
     updates.user_id = user?._id;
+    updates.is_unregistered = !user;
+  }
+
+  if (updates.desistencia) {
+    updates.status = 'desistente';
+    if (updates.fiador_assumiu === undefined) {
+      updates.fiador_assumiu = true;
+    }
   }
 
   const filter = req.user.role === 'admin' ? { _id: req.params.id } : { _id: req.params.id, user_id: req.user._id };
