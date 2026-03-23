@@ -6,14 +6,18 @@ const {
   getFinanceHistory,
   getMyFinancialSummary,
 } = require('../controllers/financeController');
-const { requireAuth } = require('../middleware/auth');
+
+const { requireAuth, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
-router.get('/fund-data', requireAuth, getFunds);
-router.put('/fund-data', requireAuth, updateFunds);
-router.get('/dashboard', requireAuth, getFinanceDashboard);
-router.get('/history', requireAuth, getFinanceHistory);
+// 🔥 ADMIN ONLY
+router.get('/fund-data', requireAuth, requireRole('admin'), getFunds);
+router.put('/fund-data', requireAuth, requireRole('admin'), updateFunds);
+router.get('/dashboard', requireAuth, requireRole('admin'), getFinanceDashboard);
+router.get('/history', requireAuth, requireRole('admin'), getFinanceHistory);
+
+// 🔥 QUALQUER LOGADO
 router.get('/my-summary', requireAuth, getMyFinancialSummary);
 
 module.exports = router;
