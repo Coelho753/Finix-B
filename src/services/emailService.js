@@ -5,19 +5,18 @@ function isEmailConfigured() {
 }
 
 function buildResetUrl(token) {
-  const base = env.passwordResetUrlBase;
-  const separator = base.includes('?') ? '&' : '?';
-  return `${base}${separator}token=${encodeURIComponent(token)}`;
+  return `${env.passwordResetUrlBase}?token=${token}`;
 }
 
 async function sendPasswordResetEmail({ to, name, token }) {
   if (!isEmailConfigured()) {
-    const error = new Error('Serviço de e-mail não configurado no backend');
+    const error = new Error('Serviço de e-mail não configurado');
     error.code = 'EMAIL_NOT_CONFIGURED';
     throw error;
   }
 
   const resetUrl = buildResetUrl(token);
+
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -29,25 +28,16 @@ async function sendPasswordResetEmail({ to, name, token }) {
       to: [to],
       subject: 'Recuperação de senha - Grupo Finix',
       html: `
-        <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #111827;">
-          <h2>Recuperação de senha</h2>
-          <p>Olá, ${name || 'usuário'}.</p>
-          <p>Recebemos uma solicitação para redefinir sua senha.</p>
-          <p><a href="${resetUrl}">Clique aqui para redefinir sua senha</a></p>
-          <p>Se preferir, use este token manualmente:</p>
-          <pre style="padding:12px;background:#f3f4f6;border-radius:6px;">${token}</pre>
-          <p>Este link/token expira em 15 minutos.</p>
-        </div>
+        <h2>Recuperação de senha</h2>
+        <p>Olá ${name}</p>
+        <a href="${resetUrl}">Redefinir senha</a>
+        <p>Token: ${token}</p>
       `,
-      text: `Olá, ${name || 'usuário'}! Use o link ${resetUrl} ou o token ${token} para redefinir sua senha. O token expira em 15 minutos.`,
     }),
   });
 
   if (!response.ok) {
-    const body = await response.text();
-    const error = new Error(`Falha ao enviar email: ${response.status} ${body}`);
-    error.code = 'EMAIL_SEND_FAILED';
-    throw error;
+    throw new Error('Erro ao enviar email');
   }
 
   return response.json();
