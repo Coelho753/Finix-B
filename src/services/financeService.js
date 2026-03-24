@@ -4,6 +4,22 @@ const PaymentNotification = require('../models/PaymentNotification');
 const User = require('../models/User');
 const { sanitizeInput } = require('./authService');
 
+function serializeFundConfig(doc) {
+  const payload = {
+    f1_balance: Number(doc?.f1_balance || 0),
+    f2_balance: Number(doc?.f2_balance || 0),
+    f1_description: doc?.f1_description || '',
+    f2_description: doc?.f2_description || '',
+    taxa_lucro: Number(doc?.taxa_lucro || 0),
+    aportes_override: Object.fromEntries((doc?.aportes_override || new Map()).entries?.() || Object.entries(doc?.aportes_override || {})),
+  };
+
+  // backward compatibility keys
+  payload.f1_value = payload.f1_balance;
+  payload.f2_value = payload.f2_balance;
+  return payload;
+}
+
 async function getFundData() {
   const fundData = await FundConfig.findOneAndUpdate(
     { key: 'default' },
@@ -11,22 +27,34 @@ async function getFundData() {
     { new: true, upsert: true }
   );
 
-  return fundData;
+  return serializeFundConfig(fundData);
 }
 
 async function saveFundData(payload) {
+  const rawOverrides = payload?.aportes_override && typeof payload.aportes_override === 'object'
+    ? payload.aportes_override
+    : {};
+
+  const sanitizedOverrides = Object.fromEntries(
+    Object.entries(rawOverrides).map(([name, value]) => [sanitizeInput(name), Number(value) || 0])
+  );
+
   const updates = {
-    f1_value: Number(payload?.f1_value) || 0,
+    f1_balance: Number(payload?.f1_balance ?? payload?.f1_value) || 0,
     f1_description: sanitizeInput(payload?.f1_description || ''),
-    f2_value: Number(payload?.f2_value) || 0,
+    f2_balance: Number(payload?.f2_balance ?? payload?.f2_value) || 0,
     f2_description: sanitizeInput(payload?.f2_description || ''),
+    taxa_lucro: Number(payload?.taxa_lucro) || 0,
+    aportes_override: sanitizedOverrides,
   };
 
-  return FundConfig.findOneAndUpdate(
+  const saved = await FundConfig.findOneAndUpdate(
     { key: 'default' },
     { $set: updates, $setOnInsert: { key: 'default' } },
     { new: true, upsert: true, runValidators: true }
   );
+
+  return serializeFundConfig(saved);
 }
 
 function calculateTaxBreakdown(transaction) {
@@ -69,7 +97,7 @@ function calculateTaxBreakdown(transaction) {
   };
 }
 
-function buildContributionRows(socios, confirmedNotifications) {
+function buildContributionRows(socios, confirmedNotifications, overrides) {
   const socioIds = new Set(socios.map((user) => String(user._id)));
   const contributionRows = new Map(
     socios.map((user) => [String(user._id), {
@@ -92,6 +120,14 @@ function buildContributionRows(socios, confirmedNotifications) {
     row.meses_pagos.push(notification.mes_referencia);
     row.total_aportado = Number((row.total_aportado + notification.valor).toFixed(2));
     row.quantidade_meses_pagos += 1;
+  }
+
+  for (const row of contributionRows.values()) {
+    const manual = overrides[row.socio_nome];
+    if (manual !== undefined) {
+      row.total_aportado = Number(manual) || 0;
+      row.override_aplicado = true;
+    }
   }
 
   return Array.from(contributionRows.values());
@@ -175,7 +211,7 @@ async function buildFinanceSummary() {
   ]);
 
   const confirmedNotifications = notifications.filter((notification) => notification.status === 'confirmado');
-  const contributionRows = buildContributionRows(socios, confirmedNotifications);
+  const contributionRows = buildContributionRows(socios, confirmedNotifications, fundData.aportes_override || {});
 
   const taxBreakdown = transactions.map(calculateTaxBreakdown);
   const totals = taxBreakdown.reduce((acc, row) => ({
@@ -254,21 +290,19 @@ async function getSocioFinancialSummary(userId) {
     (notification) => !notification.transaction_id && !notification.parcela_numero
   );
 
+  const manualOverride = summary.funds.aportes_override?.[user.name];
+  const totalAportado = manualOverride !== undefined
+    ? Number(manualOverride) || 0
+    : Number(contributionNotifications.reduce((total, notification) => total + notification.valor, 0).toFixed(2));
+
   return {
     socio_id: user._id,
     socio_nome: user.name,
-    total_aportado: Number(
-      contributionNotifications.reduce((total, notification) => total + notification.valor, 0).toFixed(2)
-    ),
+    total_aportado: totalAportado,
     quantidade_meses_pagos: contributionNotifications.length,
     meses_pagos: contributionNotifications.map((notification) => notification.mes_referencia),
     lucro_estimado: summary.lucro_estimado_por_socio.lucro_por_socio,
-    saldo_estimado: Number(
-      (
-        contributionNotifications.reduce((total, notification) => total + notification.valor, 0) +
-        summary.lucro_estimado_por_socio.lucro_por_socio
-      ).toFixed(2)
-    ),
+    saldo_estimado: Number((totalAportado + summary.lucro_estimado_por_socio.lucro_por_socio).toFixed(2)),
   };
 }
 

@@ -83,6 +83,10 @@ npm start
 - `GET /api/finance/history` (Bearer admin)
 - `GET /api/finance/my-summary` (Bearer sócio)
 
+### Configuração de fundos (compatível frontend)
+- `GET /api/fund-config` (Bearer admin)
+- `PUT /api/fund-config` (Bearer admin)
+
 ## Regras de autenticação
 
 ### Cadastro (`POST /api/auth/register`)
@@ -181,3 +185,21 @@ A discriminação visível de taxas não expõe mais a parte do fiador nas tabel
 
 ## Usuários administrativos
 O modelo `User` também aceita o campo opcional `titulo` para persistir cargos como `Dir. Executivo`, `Dir. de Negócios` e `Dir. Financeiro`.
+
+
+## Documento esperado em /api/fund-config
+Exemplo:
+
+```json
+{
+  "f1_balance": 15000,
+  "f2_balance": 5000,
+  "f1_description": "Fundo de investimento dos sócios",
+  "f2_description": "Fundo exclusivo de diretores",
+  "taxa_lucro": 8.5,
+  "aportes_override": {
+    "João Silva": 600,
+    "Maria Santos": 1200
+  }
+}
+```
