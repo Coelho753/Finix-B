@@ -6,6 +6,8 @@ const promotionCodeSchema = new mongoose.Schema(
     active: { type: Boolean, default: true },
     expiresAt: { type: Date },
     usedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    usedByName: { type: String, trim: true },
+    usedAt: { type: Date },
   },
   { timestamps: true }
 );

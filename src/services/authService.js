@@ -2,6 +2,8 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const env = require('../config/env');
 
+const PASSWORD_POLICY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+
 async function hashPassword(password) {
   return bcrypt.hash(password, 10);
 }
@@ -18,4 +20,13 @@ function signToken(user) {
   );
 }
 
-module.exports = { hashPassword, comparePassword, signToken };
+function isStrongPassword(password) {
+  return PASSWORD_POLICY_REGEX.test(password || '');
+}
+
+function sanitizeInput(value) {
+  if (typeof value !== 'string') return value;
+  return value.replace(/[<>"';(){}]/g, '').trim();
+}
+
+module.exports = { hashPassword, comparePassword, signToken, isStrongPassword, sanitizeInput };
