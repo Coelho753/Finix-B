@@ -28,7 +28,13 @@ async function register(req, res) {
     });
   }
 
-  const role = cleanRole === 'socio' ? 'socio' : 'terceiro';
+  const roleInput = typeof cleanRole === 'string'
+    ? cleanRole.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    : '';
+
+  let role = 'terceiro';
+  if (roleInput === 'socio') role = 'socio';
+  if (roleInput === 'admin') role = 'admin';
 
   const email = cleanEmail.toLowerCase();
   const exists = await User.findOne({ email });
