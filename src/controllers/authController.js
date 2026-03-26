@@ -10,22 +10,60 @@ const {
 } = require('../services/authService');
 const { sendPasswordResetEmail } = require('../services/emailService');
 
-// 🔐 RESPOSTA PADRÃO
 function buildAuthResponse(user, message) {
   const token = signToken(user);
-
   const payload = {
     user: {
       id: user._id,
+      _id: user._id,
       email: user.email,
       name: user.name,
       role: user.role,
     },
     token,
+    accessToken: token,
   };
 
   if (message) payload.message = message;
   return payload;
+}
+
+async function register(req, res) {
+  const cleanName = sanitizeInput(req.body?.name);
+  const cleanEmail = sanitizeInput(req.body?.email);
+  const cleanPassword = sanitizeInput(req.body?.password);
+  const cleanRole = sanitizeInput(req.body?.role);
+
+  if (!cleanName || !cleanEmail || !cleanPassword) {
+    return res.status(400).json({ message: 'Nome, e-mail e senha são obrigatórios' });
+  }
+
+  if (!isStrongPassword(cleanPassword)) {
+    return res.status(400).json({
+      message:
+        'A senha deve ter ao menos 8 caracteres, com maiúscula, minúscula, número e caractere especial',
+    });
+  }
+
+  const role = typeof cleanRole === 'string' ? cleanRole.trim().toLowerCase() : '';
+  if (!['admin', 'socio', 'terceiro'].includes(role)) {
+    return res.status(400).json({ message: 'Role inválida. Use admin, socio ou terceiro' });
+  }
+
+  const email = cleanEmail.toLowerCase();
+  const exists = await User.findOne({ email });
+  if (exists) {
+    return res.status(409).json({ message: 'E-mail já cadastrado' });
+  }
+
+  const user = await User.create({
+    name: cleanName,
+    email,
+    role,
+    passwordHash: await hashPassword(cleanPassword),
+  });
+
+  return res.status(201).json(buildAuthResponse(user));
 }
 
 // 🟢 REGISTER
@@ -101,26 +139,11 @@ async function login(req, res) {
   }
 }
 
-// 🧠 GET USER REAL (CORRIGIDO)
+  return res.json(buildAuthResponse(user));
+}
+
 async function getMe(req, res) {
-  try {
-    const user = await User.findById(req.user._id).select('-passwordHash');
-
-    if (!user) {
-      return res.status(404).json({ message: 'Usuário não encontrado' });
-    }
-
-    return res.json({
-      user: {
-        id: user._id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-      },
-    });
-  } catch (err) {
-    return res.status(500).json({ message: err.message });
-  }
+  return res.json(buildAuthResponse(req.user));
 }
 
 // 🚪 LOGOUT
@@ -225,7 +248,7 @@ async function promoteToSocio(req, res) {
 
   await promotion.save();
 
-  return res.json(buildAuthResponse(req.user, 'Promovido para sócio'));
+  return res.json(buildAuthResponse(req.user, 'Conta promovida para sócio com sucesso'));
 }
 
 module.exports = {
