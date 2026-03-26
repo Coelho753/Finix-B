@@ -10,14 +10,12 @@ const {
 } = require('../services/authService');
 const { sendPasswordResetEmail } = require('../services/emailService');
 
-const MEMBERSHIP_CODE = 'FINIX75345609';
 
 async function register(req, res) {
   const cleanName = sanitizeInput(req.body?.name);
   const cleanEmail = sanitizeInput(req.body?.email);
   const cleanPassword = sanitizeInput(req.body?.password);
   const cleanRole = sanitizeInput(req.body?.role);
-  const cleanMembershipCode = sanitizeInput(req.body?.membershipCode);
 
   if (!cleanName || !cleanEmail || !cleanPassword) {
     return res.status(400).json({ message: 'Nome, e-mail e senha são obrigatórios' });
@@ -30,9 +28,9 @@ async function register(req, res) {
     });
   }
 
-  const role = cleanRole === 'socio' ? 'socio' : 'terceiro';
-  if (role === 'socio' && cleanMembershipCode !== MEMBERSHIP_CODE) {
-    return res.status(400).json({ message: 'Código de sócio inválido' });
+  const role = typeof cleanRole === 'string' ? cleanRole.toLowerCase() : '';
+  if (!['admin', 'socio', 'terceiro'].includes(role)) {
+    return res.status(400).json({ message: 'Role inválida. Use admin, socio ou terceiro' });
   }
 
   const email = cleanEmail.toLowerCase();
@@ -80,6 +78,19 @@ async function login(req, res) {
       role: user.role,
     },
     token: signToken(user),
+  });
+}
+
+
+async function getMe(req, res) {
+  return res.json({
+    user: {
+      id: req.user._id,
+      email: req.user.email,
+      name: req.user.name,
+      role: req.user.role,
+    },
+    token: signToken(req.user),
   });
 }
 
@@ -208,6 +219,7 @@ async function promoteToSocio(req, res) {
 module.exports = {
   register,
   login,
+  getMe,
   logout,
   forgotPassword,
   resetPassword,
