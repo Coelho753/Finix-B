@@ -86,6 +86,19 @@ async function getMe(req, res) {
   return res.json(buildAuthResponse(req.user));
 }
 
+
+async function getMe(req, res) {
+  return res.json({
+    user: {
+      id: req.user._id,
+      email: req.user.email,
+      name: req.user.name,
+      role: req.user.role,
+    },
+    token: signToken(req.user),
+  });
+}
+
 async function logout(req, res) {
   return res.status(200).json({ message: 'Logout realizado com sucesso', success: true });
 }
