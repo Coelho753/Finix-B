@@ -10,6 +10,23 @@ const {
 } = require('../services/authService');
 const { sendPasswordResetEmail } = require('../services/emailService');
 
+function buildAuthResponse(user, message) {
+  const token = signToken(user);
+  const payload = {
+    user: {
+      id: user._id,
+      _id: user._id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+    },
+    token,
+    accessToken: token,
+  };
+
+  if (message) payload.message = message;
+  return payload;
+}
 
 async function register(req, res) {
   const cleanName = sanitizeInput(req.body?.name);
@@ -28,8 +45,7 @@ async function register(req, res) {
     });
   }
 
-
-  const role = typeof cleanRole === 'string' ? cleanRole.toLowerCase() : '';
+  const role = typeof cleanRole === 'string' ? cleanRole.trim().toLowerCase() : '';
   if (!['admin', 'socio', 'terceiro'].includes(role)) {
     return res.status(400).json({ message: 'Role inválida. Use admin, socio ou terceiro' });
   }
@@ -47,15 +63,7 @@ async function register(req, res) {
     passwordHash: await hashPassword(cleanPassword),
   });
 
-  return res.status(201).json({
-    user: {
-      id: user._id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-    },
-    token: signToken(user),
-  });
+  return res.status(201).json(buildAuthResponse(user));
 }
 
 async function login(req, res) {
@@ -71,15 +79,11 @@ async function login(req, res) {
     return res.status(401).json({ message: 'Credenciais inválidas' });
   }
 
-  return res.json({
-    user: {
-      id: user._id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-    },
-    token: signToken(user),
-  });
+  return res.json(buildAuthResponse(user));
+}
+
+async function getMe(req, res) {
+  return res.json(buildAuthResponse(req.user));
 }
 
 
@@ -205,16 +209,7 @@ async function promoteToSocio(req, res) {
   promotion.usedAt = new Date();
   await promotion.save();
 
-  return res.json({
-    message: 'Conta promovida para sócio com sucesso',
-    user: {
-      id: req.user._id,
-      email: req.user.email,
-      name: req.user.name,
-      role: req.user.role,
-    },
-    token: signToken(req.user),
-  });
+  return res.json(buildAuthResponse(req.user, 'Conta promovida para sócio com sucesso'));
 }
 
 module.exports = {
