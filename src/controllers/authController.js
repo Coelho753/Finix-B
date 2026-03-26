@@ -28,14 +28,11 @@ async function register(req, res) {
     });
   }
 
-<<<<<<< codex/create-/api/fund-config-endpoint-5nmllz
+
   const role = typeof cleanRole === 'string' ? cleanRole.toLowerCase() : '';
   if (!['admin', 'socio', 'terceiro'].includes(role)) {
     return res.status(400).json({ message: 'Role inválida. Use admin, socio ou terceiro' });
   }
-=======
-  const role = cleanRole === 'socio' ? 'socio' : 'terceiro';
->>>>>>> main
 
   const email = cleanEmail.toLowerCase();
   const exists = await User.findOne({ email });
