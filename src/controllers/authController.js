@@ -10,6 +10,7 @@ const {
 } = require('../services/authService');
 const { sendPasswordResetEmail } = require('../services/emailService');
 
+// 🔧 SERIALIZAÇÃO
 function serializeUser(user) {
   return {
     id: String(user._id),
@@ -20,8 +21,10 @@ function serializeUser(user) {
   };
 }
 
+// 🔧 RESPOSTA PADRÃO
 function buildAuthResponse(user, message) {
   const token = signToken(user);
+
   const payload = {
     user: serializeUser(user),
     token,
@@ -32,56 +35,48 @@ function buildAuthResponse(user, message) {
   return payload;
 }
 
+// 🟢 REGISTER
 async function register(req, res) {
-  const cleanName = sanitizeInput(req.body?.name);
-  const cleanEmail = sanitizeInput(req.body?.email);
-  const cleanPassword = sanitizeInput(req.body?.password);
-  const cleanRole = sanitizeInput(req.body?.role);
+  try {
+    const cleanName = sanitizeInput(req.body?.name);
+    const cleanEmail = sanitizeInput(req.body?.email);
+    const cleanPassword = sanitizeInput(req.body?.password);
+    const cleanRole = sanitizeInput(req.body?.role);
 
-  if (!cleanName || !cleanEmail || !cleanPassword) {
-    return res.status(400).json({ message: 'Nome, e-mail e senha são obrigatórios' });
-  }
+    if (!cleanName || !cleanEmail || !cleanPassword) {
+      return res.status(400).json({ message: 'Nome, e-mail e senha são obrigatórios' });
+    }
 
-  if (!isStrongPassword(cleanPassword)) {
-    return res.status(400).json({
-      message:
-        'A senha deve ter ao menos 8 caracteres, com maiúscula, minúscula, número e caractere especial',
+    if (!isStrongPassword(cleanPassword)) {
+      return res.status(400).json({ message: 'Senha fraca' });
+    }
+
+    const role = cleanRole?.toLowerCase();
+    if (!['admin', 'socio', 'terceiro'].includes(role)) {
+      return res.status(400).json({ message: 'Role inválida' });
+    }
+
+    const email = cleanEmail.toLowerCase();
+
+    const exists = await User.findOne({ email });
+    if (exists) {
+      return res.status(409).json({ message: 'E-mail já cadastrado' });
+    }
+
+    const user = await User.create({
+      name: cleanName,
+      email,
+      role,
+      passwordHash: await hashPassword(cleanPassword),
     });
-  }
 
-  const role = typeof cleanRole === 'string' ? cleanRole.trim().toLowerCase() : '';
-  if (!['admin', 'socio', 'terceiro'].includes(role)) {
-    return res.status(400).json({ message: 'Role inválida. Use admin, socio ou terceiro' });
-  }
-
-  const email = cleanEmail.toLowerCase();
-  const exists = await User.findOne({ email });
-  if (exists) {
-    return res.status(409).json({ message: 'E-mail já cadastrado' });
-  }
-
-  const user = await User.create({
-    name: cleanName,
-    email,
-    role,
-    passwordHash: await hashPassword(cleanPassword),
-  });
-
-  const dbUser = await User.findById(user._id);
-  return res.status(201).json(buildAuthResponse(dbUser));
-}
-
-async function login(req, res) {
-  const email = sanitizeInput(req.body?.email || '').toLowerCase();
-  const password = sanitizeInput(req.body?.password || '');
-
-  const user = await User.findOne({ email });
-  if (!user) {
-    return res.status(401).json({ message: 'Credenciais inválidas' });
+    return res.status(201).json(buildAuthResponse(user));
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
   }
 }
 
-// 🔐 LOGIN (CORRIGIDO E SEGURO)
+// 🔐 LOGIN
 async function login(req, res) {
   try {
     const email = sanitizeInput(req.body?.email || '').toLowerCase();
@@ -109,21 +104,9 @@ async function login(req, res) {
   }
 }
 
-  const dbUser = await User.findById(user._id);
-  if (!dbUser) {
-    return res.status(404).json({ message: 'Usuário não encontrado' });
-  }
-
-  return res.json(buildAuthResponse(dbUser));
-}
-
+// 👤 GET ME
 async function getMe(req, res) {
-  const dbUser = await User.findById(req.user._id);
-  if (!dbUser) {
-    return res.status(404).json({ message: 'Usuário não encontrado' });
-  }
-
-  return res.json(buildAuthResponse(dbUser));
+  return res.json(buildAuthResponse(req.user));
 }
 
 // 🚪 LOGOUT
@@ -205,7 +188,7 @@ async function resetPassword(req, res) {
   }
 }
 
-// 🚀 PROMOVER TERCEIRO → SOCIO
+// 🚀 PROMOVER
 async function promoteToSocio(req, res) {
   try {
     const code = sanitizeInput(req.body?.code);
@@ -228,8 +211,18 @@ async function promoteToSocio(req, res) {
       return res.status(400).json({ message: 'Código expirado' });
     }
 
-  const dbUser = await User.findById(req.user._id);
-  return res.json(buildAuthResponse(dbUser, 'Conta promovida para sócio com sucesso'));
+    req.user.role = 'socio';
+    await req.user.save();
+
+    promotion.active = false;
+    promotion.usedBy = req.user._id;
+    promotion.usedAt = new Date();
+    await promotion.save();
+
+    return res.json(buildAuthResponse(req.user, 'Conta promovida com sucesso'));
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
 }
 
 module.exports = {
