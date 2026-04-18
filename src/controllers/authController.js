@@ -47,8 +47,8 @@ async function register(req, res) {
       return res.status(400).json({ message: 'Nome, e-mail e senha são obrigatórios' });
     }
 
-  const role = typeof cleanRole === 'string' ? cleanRole.trim().toLowerCase() : '';
-  if (!['admin', 'socio', 'terceiro'].includes(role)) {
+  const normalizedRole = typeof cleanRole === 'string' ? cleanRole.trim().toLowerCase() : '';
+  if (!['admin', 'socio', 'terceiro'].includes(normalizedRole)) {
     return res.status(400).json({ message: 'Role inválida. Use admin, socio ou terceiro' });
   }
 
@@ -60,7 +60,7 @@ async function register(req, res) {
   const user = await User.create({
     name: cleanName,
     email,
-    role,
+    role: normalizedRole,
     passwordHash: await hashPassword(cleanPassword),
   });
 
