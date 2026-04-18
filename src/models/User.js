@@ -11,6 +11,8 @@ const userSchema = new mongoose.Schema(
       default: 'terceiro',
     },
     guarantorName: { type: String },
+    resetToken: { type: String },
+    resetTokenExpire: { type: Date },
     resetPasswordToken: { type: String },
     resetPasswordExpiresAt: { type: Date },
   },
