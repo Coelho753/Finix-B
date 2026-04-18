@@ -32,6 +32,7 @@ function buildAuthResponse(user, message) {
   return payload;
 }
 
+// 🟢 REGISTER
 async function register(req, res) {
   const cleanName = sanitizeInput(req.body?.name);
   const cleanEmail = sanitizeInput(req.body?.email);
@@ -42,23 +43,19 @@ async function register(req, res) {
     return res.status(400).json({ message: 'Nome, e-mail e senha são obrigatórios' });
   }
 
-  if (!isStrongPassword(cleanPassword)) {
-    return res.status(400).json({
-      message:
-        'A senha deve ter ao menos 8 caracteres, com maiúscula, minúscula, número e caractere especial',
-    });
-  }
+    if (!cleanName || !cleanEmail || !cleanPassword) {
+      return res.status(400).json({ message: 'Nome, e-mail e senha são obrigatórios' });
+    }
 
   const normalizedRole = typeof cleanRole === 'string' ? cleanRole.trim().toLowerCase() : '';
   if (!['admin', 'socio', 'terceiro'].includes(normalizedRole)) {
     return res.status(400).json({ message: 'Role inválida. Use admin, socio ou terceiro' });
   }
 
-  const email = cleanEmail.toLowerCase();
-  const exists = await User.findOne({ email });
-  if (exists) {
-    return res.status(409).json({ message: 'E-mail já cadastrado' });
-  }
+    const role = cleanRole?.toLowerCase();
+    if (!['admin', 'socio', 'terceiro'].includes(role)) {
+      return res.status(400).json({ message: 'Role inválida' });
+    }
 
   const user = await User.create({
     name: cleanName,
@@ -71,6 +68,7 @@ async function register(req, res) {
   return res.status(201).json(buildAuthResponse(dbUser));
 }
 
+// 🔐 LOGIN
 async function login(req, res) {
   const email = sanitizeInput(req.body?.email || '').toLowerCase();
   const password = sanitizeInput(req.body?.password || '');
@@ -80,10 +78,15 @@ async function login(req, res) {
     return res.status(401).json({ message: 'Credenciais inválidas' });
   }
 
-  const ok = await comparePassword(password, user.passwordHash);
-  if (!ok) {
-    return res.status(401).json({ message: 'Credenciais inválidas' });
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Credenciais inválidas' });
+    }
+
+    return res.json(buildAuthResponse(user));
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
   }
+}
 
   const dbUser = await User.findById(user._id);
   if (!dbUser) {
@@ -102,10 +105,12 @@ async function getMe(req, res) {
   return res.json(buildAuthResponse(dbUser));
 }
 
+// 🚪 LOGOUT
 async function logout(req, res) {
-  return res.status(200).json({ message: 'Logout realizado com sucesso', success: true });
+  return res.status(200).json({ message: 'Logout realizado com sucesso' });
 }
 
+// 🔁 FORGOT PASSWORD
 async function forgotPassword(req, res) {
   const email = sanitizeInput(req.body?.email || '').toLowerCase();
   if (!email) {
@@ -143,8 +148,9 @@ async function forgotPassword(req, res) {
 
 
 async function resetPassword(req, res) {
-  const token = sanitizeInput(req.body?.token || '');
-  const nextPassword = sanitizeInput(req.body?.password || req.body?.newPassword || '');
+  try {
+    const token = sanitizeInput(req.body?.token || '');
+    const password = sanitizeInput(req.body?.password || '');
 
   if (!token || !nextPassword) {
     return res.status(400).json({ error: 'Token e nova senha são obrigatórios' });
@@ -175,23 +181,29 @@ async function resetPassword(req, res) {
 
 
 async function promoteToSocio(req, res) {
-  const code = sanitizeInput(req.body?.code);
-  if (!code) {
-    return res.status(400).json({ message: 'Código é obrigatório' });
-  }
+  try {
+    const code = sanitizeInput(req.body?.code);
 
-  if (req.user.role !== 'terceiro') {
-    return res.status(400).json({ message: 'Somente terceiros podem virar sócios' });
-  }
+    if (!code) {
+      return res.status(400).json({ message: 'Código obrigatório' });
+    }
 
-  const promotion = await PromotionCode.findOne({ code, active: true });
-  if (!promotion) {
-    return res.status(404).json({ message: 'Código inválido' });
-  }
+    if (req.user.role !== 'terceiro') {
+      return res.status(403).json({ message: 'Apenas terceiros podem virar sócio' });
+    }
 
-  if (promotion.expiresAt && promotion.expiresAt < new Date()) {
-    return res.status(400).json({ message: 'Código expirado' });
-  }
+    const promotion = await PromotionCode.findOne({ code, active: true });
+
+    if (!promotion) {
+      return res.status(404).json({ message: 'Código inválido' });
+    }
+
+    if (promotion.expiresAt && promotion.expiresAt < new Date()) {
+      return res.status(400).json({ message: 'Código expirado' });
+    }
+
+    req.user.role = 'socio';
+    await req.user.save();
 
   req.user.role = 'socio';
   await req.user.save();
