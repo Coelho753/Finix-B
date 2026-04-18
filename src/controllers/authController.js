@@ -112,71 +112,80 @@ async function logout(req, res) {
 
 // 🔁 FORGOT PASSWORD
 async function forgotPassword(req, res) {
-  const email = sanitizeInput(req.body?.email || '').toLowerCase();
-  if (!email) {
-    return res.status(400).json({ message: 'E-mail é obrigatório' });
+  try {
+    const email = sanitizeInput(req.body?.email || '').toLowerCase();
+    if (!email) {
+      return res.status(400).json({ message: 'E-mail é obrigatório' });
+    }
+
+    const user = await User.findOne({ email });
+
+    // Resposta genérica por segurança
+    if (!user) {
+      return res.json({ message: 'Se existir, enviamos um email' });
+    }
+
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+    user.resetToken = hashedToken;
+    user.resetTokenExpire = new Date(Date.now() + 1000 * 60 * 15);
+
+    // Compatibilidade com campos antigos
+    user.resetPasswordToken = hashedToken;
+    user.resetPasswordExpiresAt = user.resetTokenExpire;
+
+    await user.save();
+
+    const baseUrl = env.passwordResetUrlBase || 'https://seusite.com/reset-password';
+    const separator = baseUrl.includes('?') ? '&' : '?';
+    const link = `${baseUrl}${separator}token=${rawToken}`;
+
+    // Fluxo mínimo funcional (trocar por envio real de e-mail depois)
+    console.log('LINK RESET:', link);
+
+    return res.json({ message: 'Email enviado' });
+  } catch (err) {
+    console.error('Erro em forgotPassword:', err);
+    return res.status(500).json({ error: 'Erro interno' });
   }
-
-  const user = await User.findOne({ email });
-
-  // Resposta genérica por segurança
-  if (!user) {
-    return res.json({ message: 'Se existir, enviamos um email' });
-  }
-
-  const rawToken = crypto.randomBytes(32).toString('hex');
-  const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
-
-  user.resetToken = hashedToken;
-  user.resetTokenExpire = new Date(Date.now() + 1000 * 60 * 15);
-
-  // Compatibilidade com campos antigos
-  user.resetPasswordToken = hashedToken;
-  user.resetPasswordExpiresAt = user.resetTokenExpire;
-
-  await user.save();
-
-  const baseUrl = env.passwordResetUrlBase || 'https://seusite.com/reset-password';
-  const separator = baseUrl.includes('?') ? '&' : '?';
-  const link = `${baseUrl}${separator}token=${rawToken}`;
-
-  // Fluxo mínimo funcional (trocar por envio real de e-mail depois)
-  console.log('LINK RESET:', link);
-
-  return res.json({ message: 'Email enviado' });
 }
 
 
 async function resetPassword(req, res) {
   try {
     const token = sanitizeInput(req.body?.token || '');
-    const password = sanitizeInput(req.body?.password || '');
+    const nextPassword = sanitizeInput(req.body?.password || req.body?.newPassword || '');
 
-  if (!token || !nextPassword) {
-    return res.status(400).json({ error: 'Token e nova senha são obrigatórios' });
+    if (!token || !nextPassword) {
+      return res.status(400).json({ error: 'Token e nova senha são obrigatórios' });
+    }
+
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+    const user = await User.findOne({
+      resetToken: hashedToken,
+      resetTokenExpire: { $gt: new Date() },
+    });
+
+    if (!user) {
+      return res.status(400).json({ error: 'Token inválido ou expirado' });
+    }
+
+    user.passwordHash = await hashPassword(nextPassword);
+    user.resetToken = null;
+    user.resetTokenExpire = null;
+
+    // Compatibilidade com campos antigos
+    user.resetPasswordToken = null;
+    user.resetPasswordExpiresAt = null;
+
+    await user.save();
+
+    return res.json({ message: 'Senha redefinida com sucesso' });
+  } catch (err) {
+    console.error('Erro em resetPassword:', err);
+    return res.status(500).json({ error: 'Erro interno' });
   }
-
-  const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
-  const user = await User.findOne({
-    resetToken: hashedToken,
-    resetTokenExpire: { $gt: new Date() },
-  });
-
-  if (!user) {
-    return res.status(400).json({ error: 'Token inválido ou expirado' });
-  }
-
-  user.passwordHash = await hashPassword(nextPassword);
-  user.resetToken = null;
-  user.resetTokenExpire = null;
-
-  // Compatibilidade com campos antigos
-  user.resetPasswordToken = null;
-  user.resetPasswordExpiresAt = null;
-
-  await user.save();
-
-  return res.json({ message: 'Senha redefinida com sucesso' });
 }
 
 
