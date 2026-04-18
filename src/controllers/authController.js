@@ -8,16 +8,35 @@ const {
   isStrongPassword,
   sanitizeInput,
 } = require('../services/authService');
-const { sendPasswordResetEmail } = require('../services/emailService');
+const env = require('../config/env');
 
-const MEMBERSHIP_CODE = 'FINIX75345609';
+function serializeUser(user) {
+  return {
+    id: String(user._id),
+    _id: String(user._id),
+    email: user.email,
+    name: user.name,
+    role: user.role,
+  };
+}
+
+function buildAuthResponse(user, message) {
+  const token = signToken(user);
+  const payload = {
+    user: serializeUser(user),
+    token,
+    accessToken: token,
+  };
+
+  if (message) payload.message = message;
+  return payload;
+}
 
 async function register(req, res) {
   const cleanName = sanitizeInput(req.body?.name);
   const cleanEmail = sanitizeInput(req.body?.email);
   const cleanPassword = sanitizeInput(req.body?.password);
   const cleanRole = sanitizeInput(req.body?.role);
-  const cleanMembershipCode = sanitizeInput(req.body?.membershipCode);
 
   if (!cleanName || !cleanEmail || !cleanPassword) {
     return res.status(400).json({ message: 'Nome, e-mail e senha são obrigatórios' });
@@ -30,9 +49,9 @@ async function register(req, res) {
     });
   }
 
-  const role = cleanRole === 'socio' ? 'socio' : 'terceiro';
-  if (role === 'socio' && cleanMembershipCode !== MEMBERSHIP_CODE) {
-    return res.status(400).json({ message: 'Código de sócio inválido' });
+  const normalizedRole = typeof cleanRole === 'string' ? cleanRole.trim().toLowerCase() : '';
+  if (!['admin', 'socio', 'terceiro'].includes(normalizedRole)) {
+    return res.status(400).json({ message: 'Role inválida. Use admin, socio ou terceiro' });
   }
 
   const email = cleanEmail.toLowerCase();
@@ -44,24 +63,18 @@ async function register(req, res) {
   const user = await User.create({
     name: cleanName,
     email,
-    role,
+    role: normalizedRole,
     passwordHash: await hashPassword(cleanPassword),
   });
 
-  return res.status(201).json({
-    user: {
-      id: user._id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-    },
-    token: signToken(user),
-  });
+  const dbUser = await User.findById(user._id);
+  return res.status(201).json(buildAuthResponse(dbUser));
 }
 
 async function login(req, res) {
   const email = sanitizeInput(req.body?.email || '').toLowerCase();
   const password = sanitizeInput(req.body?.password || '');
+
   const user = await User.findOne({ email });
   if (!user) {
     return res.status(401).json({ message: 'Credenciais inválidas' });
@@ -72,15 +85,21 @@ async function login(req, res) {
     return res.status(401).json({ message: 'Credenciais inválidas' });
   }
 
-  return res.json({
-    user: {
-      id: user._id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-    },
-    token: signToken(user),
-  });
+  const dbUser = await User.findById(user._id);
+  if (!dbUser) {
+    return res.status(404).json({ message: 'Usuário não encontrado' });
+  }
+
+  return res.json(buildAuthResponse(dbUser));
+}
+
+async function getMe(req, res) {
+  const dbUser = await User.findById(req.user._id);
+  if (!dbUser) {
+    return res.status(404).json({ message: 'Usuário não encontrado' });
+  }
+
+  return res.json(buildAuthResponse(dbUser));
 }
 
 async function logout(req, res) {
@@ -88,82 +107,82 @@ async function logout(req, res) {
 }
 
 async function forgotPassword(req, res) {
-  const email = sanitizeInput(req.body?.email || '').toLowerCase();
-  if (!email) {
-    return res.status(400).json({ success: false, message: 'E-mail é obrigatório' });
-  }
-
-  const genericMessage = 'Se o email estiver cadastrado, você receberá instruções para redefinir a senha';
-  const user = await User.findOne({ email });
-  if (!user) {
-    return res.status(200).json({ success: true, message: genericMessage });
-  }
-
-  const resetToken = crypto.randomBytes(24).toString('hex');
-  user.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
-  user.resetPasswordExpiresAt = new Date(Date.now() + 1000 * 60 * 15);
-  await user.save();
-
   try {
-    await sendPasswordResetEmail({
-      to: user.email,
-      name: user.name,
-      token: resetToken,
-    });
-  } catch (error) {
-    if (error.code === 'EMAIL_NOT_CONFIGURED') {
-      return res.status(503).json({
-        success: false,
-        message: 'Serviço de e-mail não configurado no backend. Configure RESEND_API_KEY, EMAIL_FROM e PASSWORD_RESET_URL_BASE no Render.',
-      });
+    const email = sanitizeInput(req.body?.email || '').toLowerCase();
+    if (!email) {
+      return res.status(400).json({ message: 'E-mail é obrigatório' });
     }
 
-    return res.status(502).json({
-      success: false,
-      message: 'Não foi possível enviar o e-mail de recuperação no momento.',
-    });
-  }
+    const user = await User.findOne({ email });
 
-  return res.status(200).json({
-    success: true,
-    message: genericMessage,
-    expiresAt: user.resetPasswordExpiresAt,
-  });
+    // Resposta genérica por segurança
+    if (!user) {
+      return res.json({ message: 'Se existir, enviamos um email' });
+    }
+
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+    user.resetToken = hashedToken;
+    user.resetTokenExpire = new Date(Date.now() + 1000 * 60 * 15);
+
+    // Compatibilidade com campos antigos
+    user.resetPasswordToken = hashedToken;
+    user.resetPasswordExpiresAt = user.resetTokenExpire;
+
+    await user.save();
+
+    const baseUrl = env.passwordResetUrlBase || 'https://seusite.com/reset-password';
+    const separator = baseUrl.includes('?') ? '&' : '?';
+    const link = `${baseUrl}${separator}token=${rawToken}`;
+
+    // Fluxo mínimo funcional (trocar por envio real de e-mail depois)
+    console.log('LINK RESET:', link);
+
+    return res.json({ message: 'Email enviado' });
+  } catch (err) {
+    console.error('Erro em forgotPassword:', err);
+    return res.status(500).json({ error: 'Erro interno' });
+  }
 }
+
 
 async function resetPassword(req, res) {
-  const token = sanitizeInput(req.body?.token || '');
-  const nextPassword = sanitizeInput(req.body?.password || req.body?.newPassword || '');
+  try {
+    const token = sanitizeInput(req.body?.token || '');
+    const nextPassword = sanitizeInput(req.body?.password || req.body?.newPassword || '');
 
-  if (!token || !nextPassword) {
-    return res.status(400).json({ success: false, message: 'Token e nova senha são obrigatórios' });
-  }
+    if (!token || !nextPassword) {
+      return res.status(400).json({ error: 'Token e nova senha são obrigatórios' });
+    }
 
-  if (!isStrongPassword(nextPassword)) {
-    return res.status(400).json({
-      success: false,
-      message:
-        'A senha deve ter ao menos 8 caracteres, com maiúscula, minúscula, número e caractere especial',
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+    const user = await User.findOne({
+      resetToken: hashedToken,
+      resetTokenExpire: { $gt: new Date() },
     });
+
+    if (!user) {
+      return res.status(400).json({ error: 'Token inválido ou expirado' });
+    }
+
+    user.passwordHash = await hashPassword(nextPassword);
+    user.resetToken = null;
+    user.resetTokenExpire = null;
+
+    // Compatibilidade com campos antigos
+    user.resetPasswordToken = null;
+    user.resetPasswordExpiresAt = null;
+
+    await user.save();
+
+    return res.json({ message: 'Senha redefinida com sucesso' });
+  } catch (err) {
+    console.error('Erro em resetPassword:', err);
+    return res.status(500).json({ error: 'Erro interno' });
   }
-
-  const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
-  const user = await User.findOne({
-    resetPasswordToken: hashedToken,
-    resetPasswordExpiresAt: { $gt: new Date() },
-  });
-
-  if (!user) {
-    return res.status(400).json({ success: false, message: 'Token inválido ou expirado' });
-  }
-
-  user.passwordHash = await hashPassword(nextPassword);
-  user.resetPasswordToken = undefined;
-  user.resetPasswordExpiresAt = undefined;
-  await user.save();
-
-  return res.status(200).json({ success: true, message: 'Senha atualizada com sucesso' });
 }
+
 
 async function promoteToSocio(req, res) {
   const code = sanitizeInput(req.body?.code);
@@ -193,21 +212,14 @@ async function promoteToSocio(req, res) {
   promotion.usedAt = new Date();
   await promotion.save();
 
-  return res.json({
-    message: 'Conta promovida para sócio com sucesso',
-    user: {
-      id: req.user._id,
-      email: req.user.email,
-      name: req.user.name,
-      role: req.user.role,
-    },
-    token: signToken(req.user),
-  });
+  const dbUser = await User.findById(req.user._id);
+  return res.json(buildAuthResponse(dbUser, 'Conta promovida para sócio com sucesso'));
 }
 
 module.exports = {
   register,
   login,
+  getMe,
   logout,
   forgotPassword,
   resetPassword,
