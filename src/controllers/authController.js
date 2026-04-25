@@ -38,6 +38,7 @@ function buildAuthResponse(user, message) {
   return payload;
 }
 
+// ================= REGISTER =================
 async function register(req, res) {
   try {
     const cleanName = sanitizeInput(req.body?.name);
@@ -82,6 +83,7 @@ async function register(req, res) {
   }
 }
 
+// ================= LOGIN =================
 async function login(req, res) {
   try {
     const email = sanitizeInput(req.body?.email || '').toLowerCase();
@@ -123,8 +125,12 @@ async function getMe(req, res) {
   }
 }
 
-async function logout(req, res) {
-  return res.status(200).json({ message: 'Logout realizado com sucesso', success: true });
+  const dbUser = await User.findById(user._id);
+  if (!dbUser) {
+    return res.status(404).json({ message: 'Usuário não encontrado' });
+  }
+
+  return res.json(buildAuthResponse(dbUser));
 }
 
 async function forgotPassword(req, res) {
@@ -242,6 +248,7 @@ async function promoteToSocio(req, res) {
   }
 }
 
+// ================= EXPORT =================
 module.exports = {
   register,
   login,
