@@ -29,6 +29,12 @@ function sanitizeParcelas(parcelas) {
     .filter(Boolean);
 }
 
+function parseOptionalNumber(value) {
+  if (value === undefined || value === null || value === '') return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+
 async function resolveFiador(fiadorCode, existingFiadorNome) {
   if (!fiadorCode) {
     return { fiadorNome: existingFiadorNome, fiadorRequest: null };
@@ -66,6 +72,8 @@ async function createTransaction(req, res) {
     taxa: Number(req.body?.taxa),
     valor_total: Number(req.body?.valor_total),
     quantidade_parcelas: Number(req.body?.quantidade_parcelas),
+    fundo1_valor: parseOptionalNumber(req.body?.fundo1_valor),
+    fundo2_valor: parseOptionalNumber(req.body?.fundo2_valor),
     dia_vencimento: req.body?.dia_vencimento !== undefined ? Number(req.body?.dia_vencimento) : undefined,
     data_emprestimo: new Date(req.body?.data_emprestimo),
     parcelas: sanitizeParcelas(req.body?.parcelas),
@@ -90,6 +98,13 @@ async function createTransaction(req, res) {
     Number.isNaN(payload.data_emprestimo.getTime())
   ) {
     return res.status(400).json({ message: 'Valores do empréstimo inválidos' });
+  }
+
+  if (
+    (payload.fundo1_valor !== undefined && Number.isNaN(payload.fundo1_valor)) ||
+    (payload.fundo2_valor !== undefined && Number.isNaN(payload.fundo2_valor))
+  ) {
+    return res.status(400).json({ message: 'Valores de fundos inválidos' });
   }
 
   if (!['ativo', 'quitado', 'inadimplente', 'desistente'].includes(payload.status)) {
@@ -155,6 +170,8 @@ async function updateTransaction(req, res) {
     'dia_vencimento',
     'data_emprestimo',
     'parcelas',
+    'fundo1_valor',
+    'fundo2_valor',
   ];
 
   for (const key of allowed) {
@@ -167,7 +184,11 @@ async function updateTransaction(req, res) {
     ) {
       updates[key] = sanitizeInput(req.body[key]);
       if (key === 'email') updates.email = updates.email ? updates.email.toLowerCase() : undefined;
-    } else if (['valor_emprestimo', 'taxa', 'valor_total', 'quantidade_parcelas', 'dia_vencimento'].includes(key)) {
+    } else if (
+      ['valor_emprestimo', 'taxa', 'valor_total', 'quantidade_parcelas', 'dia_vencimento', 'fundo1_valor', 'fundo2_valor'].includes(
+        key
+      )
+    ) {
       updates[key] = Number(req.body[key]);
     } else if (['fiador_assumiu', 'desistencia', 'is_unregistered'].includes(key)) {
       updates[key] = Boolean(req.body[key]);
@@ -186,6 +207,13 @@ async function updateTransaction(req, res) {
 
   if (updates.modalidade && !['parcelado', '30dias'].includes(updates.modalidade)) {
     return res.status(400).json({ message: 'Modalidade inválida' });
+  }
+
+  if (
+    (updates.fundo1_valor !== undefined && !Number.isFinite(updates.fundo1_valor)) ||
+    (updates.fundo2_valor !== undefined && !Number.isFinite(updates.fundo2_valor))
+  ) {
+    return res.status(400).json({ message: 'Valores de fundos inválidos' });
   }
 
   if (updates.email) {
