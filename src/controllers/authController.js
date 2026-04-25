@@ -38,6 +38,11 @@ function buildAuthResponse(user, message) {
   return payload;
 }
 
+async function fetchUserById(userId) {
+  if (!userId) return null;
+  return User.findById(userId);
+}
+
 // ================= REGISTER =================
 async function register(req, res) {
   try {
@@ -75,7 +80,10 @@ async function register(req, res) {
       passwordHash: await hashPassword(cleanPassword),
     });
 
-    const dbUser = await User.findById(user._id);
+    const dbUser = await fetchUserById(user._id);
+    if (!dbUser) {
+      return res.status(404).json({ message: 'Usuário não encontrado' });
+    }
     return res.status(201).json(buildAuthResponse(dbUser));
   } catch (err) {
     console.error('Erro em register:', err);
@@ -99,7 +107,7 @@ async function login(req, res) {
       return res.status(401).json({ message: 'Credenciais inválidas' });
     }
 
-    const dbUser = await User.findById(user._id);
+    const dbUser = await fetchUserById(user._id);
     if (!dbUser) {
       return res.status(404).json({ message: 'Usuário não encontrado' });
     }
@@ -113,7 +121,7 @@ async function login(req, res) {
 
 async function getMe(req, res) {
   try {
-    const dbUser = await User.findById(req.user._id);
+    const dbUser = await fetchUserById(req.user._id);
     if (!dbUser) {
       return res.status(404).json({ message: 'Usuário não encontrado' });
     }
@@ -125,12 +133,11 @@ async function getMe(req, res) {
   }
 }
 
-  const dbUser = await User.findById(user._id);
-  if (!dbUser) {
-    return res.status(404).json({ message: 'Usuário não encontrado' });
+    return res.json(buildAuthResponse(dbUser));
+  } catch (err) {
+    console.error('Erro em login:', err);
+    return res.status(500).json({ error: 'Erro interno' });
   }
-
-  return res.json(buildAuthResponse(dbUser));
 }
 
 async function forgotPassword(req, res) {
@@ -240,7 +247,10 @@ async function promoteToSocio(req, res) {
     promotion.usedAt = new Date();
     await promotion.save();
 
-    const dbUser = await User.findById(req.user._id);
+    const dbUser = await fetchUserById(req.user._id);
+    if (!dbUser) {
+      return res.status(404).json({ message: 'Usuário não encontrado' });
+    }
     return res.json(buildAuthResponse(dbUser, 'Conta promovida para sócio com sucesso'));
   } catch (err) {
     console.error('Erro em promoteToSocio:', err);
