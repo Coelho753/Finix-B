@@ -40,63 +40,88 @@ function buildAuthResponse(user, message) {
 
 // ================= REGISTER =================
 async function register(req, res) {
-  const cleanName = sanitizeInput(req.body?.name);
-  const cleanEmail = sanitizeInput(req.body?.email);
-  const cleanPassword = sanitizeInput(req.body?.password);
-  const cleanRole = sanitizeInput(req.body?.role);
+  try {
+    const cleanName = sanitizeInput(req.body?.name);
+    const cleanEmail = sanitizeInput(req.body?.email);
+    const cleanPassword = sanitizeInput(req.body?.password);
+    const cleanRole = sanitizeInput(req.body?.role);
 
-  if (!cleanName || !cleanEmail || !cleanPassword) {
-    return res.status(400).json({ message: 'Nome, e-mail e senha são obrigatórios' });
-  }
+    if (!cleanName || !cleanEmail || !cleanPassword) {
+      return res.status(400).json({ message: 'Nome, e-mail e senha são obrigatórios' });
+    }
 
     if (!isStrongPassword(cleanPassword)) {
       return res.status(400).json({
-        message: 'Senha fraca',
+        message:
+          'A senha deve ter ao menos 8 caracteres, com maiúscula, minúscula, número e caractere especial',
       });
     }
 
-  const normalizedRole = typeof cleanRole === 'string' ? cleanRole.trim().toLowerCase() : '';
-  if (!['admin', 'socio', 'terceiro'].includes(normalizedRole)) {
-    return res.status(400).json({ message: 'Role inválida. Use admin, socio ou terceiro' });
-  }
-
+    const normalizedRole = typeof cleanRole === 'string' ? cleanRole.trim().toLowerCase() : '';
     if (!['admin', 'socio', 'terceiro'].includes(normalizedRole)) {
-      return res.status(400).json({
-        message: 'Role inválida. Use admin, socio ou terceiro',
-      });
+      return res.status(400).json({ message: 'Role inválida. Use admin, socio ou terceiro' });
     }
 
-  const user = await User.create({
-    name: cleanName,
-    email,
-    role: normalizedRole,
-    passwordHash: await hashPassword(cleanPassword),
-  });
+    const email = cleanEmail.toLowerCase();
+    const exists = await User.findOne({ email });
+    if (exists) {
+      return res.status(409).json({ message: 'E-mail já cadastrado' });
+    }
 
-  const dbUser = await User.findById(user._id);
-  return res.status(201).json(buildAuthResponse(dbUser));
+    const user = await User.create({
+      name: cleanName,
+      email,
+      role: normalizedRole,
+      passwordHash: await hashPassword(cleanPassword),
+    });
+
+    const dbUser = await User.findById(user._id);
+    return res.status(201).json(buildAuthResponse(dbUser));
+  } catch (err) {
+    console.error('Erro em register:', err);
+    return res.status(500).json({ error: 'Erro interno' });
+  }
 }
 
 // ================= LOGIN =================
 async function login(req, res) {
-  const email = sanitizeInput(req.body?.email || '').toLowerCase();
-  const password = sanitizeInput(req.body?.password || '');
+  try {
+    const email = sanitizeInput(req.body?.email || '').toLowerCase();
+    const password = sanitizeInput(req.body?.password || '');
 
-  const user = await User.findOne({ email });
-  if (!user) {
-    return res.status(401).json({ message: 'Credenciais inválidas' });
-  }
-
-    if (!isMatch) {
-      return res.status(401).json({
-        message: 'Credenciais inválidas',
-      });
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(401).json({ message: 'Credenciais inválidas' });
     }
 
-    return res.json(buildAuthResponse(user));
+    const ok = await comparePassword(password, user.passwordHash);
+    if (!ok) {
+      return res.status(401).json({ message: 'Credenciais inválidas' });
+    }
+
+    const dbUser = await User.findById(user._id);
+    if (!dbUser) {
+      return res.status(404).json({ message: 'Usuário não encontrado' });
+    }
+
+    return res.json(buildAuthResponse(dbUser));
   } catch (err) {
     console.error('Erro em login:', err);
-    return res.status(500).json({ message: 'Erro interno' });
+    return res.status(500).json({ error: 'Erro interno' });
+  }
+}
+
+async function getMe(req, res) {
+  try {
+    const dbUser = await User.findById(req.user._id);
+    if (!dbUser) {
+      return res.status(404).json({ message: 'Usuário não encontrado' });
+    }
+
+    return res.json(buildAuthResponse(dbUser));
+  } catch (err) {
+    console.error('Erro em getMe:', err);
+    return res.status(500).json({ error: 'Erro interno' });
   }
 }
 
@@ -108,23 +133,6 @@ async function login(req, res) {
   return res.json(buildAuthResponse(dbUser));
 }
 
-async function getMe(req, res) {
-  const dbUser = await User.findById(req.user._id);
-  if (!dbUser) {
-    return res.status(404).json({ message: 'Usuário não encontrado' });
-  }
-
-  return res.json(buildAuthResponse(dbUser));
-}
-
-// ================= LOGOUT =================
-async function logout(req, res) {
-  return res.status(200).json({
-    message: 'Logout realizado com sucesso',
-  });
-}
-
-// ================= FORGOT PASSWORD =================
 async function forgotPassword(req, res) {
   try {
     const email = sanitizeInput(req.body?.email || '').toLowerCase();
@@ -206,35 +214,38 @@ async function resetPassword(req, res) {
 async function promoteToSocio(req, res) {
   try {
     const code = sanitizeInput(req.body?.code);
-
     if (!code) {
-      return res.status(400).json({
-        message: 'Código obrigatório',
-      });
+      return res.status(400).json({ message: 'Código é obrigatório' });
     }
 
     if (req.user.role !== 'terceiro') {
-      return res.status(403).json({
-        message: 'Apenas terceiros podem virar sócio',
-      });
+      return res.status(400).json({ message: 'Somente terceiros podem virar sócios' });
     }
 
-    const promotion = await PromotionCode.findOne({
-      code,
-      active: true,
-    });
+    const promotion = await PromotionCode.findOne({ code, active: true });
+    if (!promotion) {
+      return res.status(404).json({ message: 'Código inválido' });
+    }
 
-  req.user.role = 'socio';
-  await req.user.save();
+    if (promotion.expiresAt && promotion.expiresAt < new Date()) {
+      return res.status(400).json({ message: 'Código expirado' });
+    }
 
-  promotion.active = false;
-  promotion.usedBy = req.user._id;
-  promotion.usedByName = req.user.name;
-  promotion.usedAt = new Date();
-  await promotion.save();
+    req.user.role = 'socio';
+    await req.user.save();
 
-  const dbUser = await User.findById(req.user._id);
-  return res.json(buildAuthResponse(dbUser, 'Conta promovida para sócio com sucesso'));
+    promotion.active = false;
+    promotion.usedBy = req.user._id;
+    promotion.usedByName = req.user.name;
+    promotion.usedAt = new Date();
+    await promotion.save();
+
+    const dbUser = await User.findById(req.user._id);
+    return res.json(buildAuthResponse(dbUser, 'Conta promovida para sócio com sucesso'));
+  } catch (err) {
+    console.error('Erro em promoteToSocio:', err);
+    return res.status(500).json({ error: 'Erro interno' });
+  }
 }
 
 // ================= EXPORT =================
