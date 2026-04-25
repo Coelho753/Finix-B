@@ -32,6 +32,8 @@ const transactionSchema = new mongoose.Schema(
     data_emprestimo: { type: Date, required: true },
     dia_vencimento: { type: Number },
     observacoes: { type: String, trim: true },
+    fundo1_valor: { type: Number },
+    fundo2_valor: { type: Number },
     status: {
       type: String,
       enum: ['ativo', 'quitado', 'inadimplente', 'desistente'],
