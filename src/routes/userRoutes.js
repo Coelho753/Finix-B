@@ -4,6 +4,7 @@ const {
   listSocios,
   createUser,
   updateUser,
+  updateMe,
   deleteUser,
 } = require('../controllers/userController');
 
@@ -16,6 +17,7 @@ const router = express.Router();
 router.get('/socios', requireAuth, requireRole('admin'), listSocios);
 router.get('/', requireAuth, requireRole('admin'), listUsers);
 router.post('/', requireAuth, requireRole('admin'), createUser);
+router.put('/me', requireAuth, updateMe);
 router.put('/:id', requireAuth, requireRole('admin'), updateUser);
 router.delete('/:id', requireAuth, requireRole('admin'), deleteUser);
 
