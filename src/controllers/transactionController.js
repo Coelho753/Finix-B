@@ -63,6 +63,9 @@ async function createTransaction(req, res) {
     modalidade: sanitizeInput(req.body?.modalidade) || 'parcelado',
     fiador_nome: sanitizeInput(req.body?.fiador_nome),
     fiador_telefone: sanitizeInput(req.body?.fiador_telefone),
+    cpf: sanitizeInput(req.body?.cpf),
+    cep: sanitizeInput(req.body?.cep),
+    endereco: sanitizeInput(req.body?.endereco),
     fiador_code: sanitizeInput(req.body?.fiador_code),
     fiador_assumiu: Boolean(req.body?.fiador_assumiu),
     desistencia: Boolean(req.body?.desistencia),
@@ -157,6 +160,9 @@ async function updateTransaction(req, res) {
     'modalidade',
     'fiador_nome',
     'fiador_telefone',
+    'cpf',
+    'cep',
+    'endereco',
     'fiador_code',
     'fiador_assumiu',
     'desistencia',
@@ -178,7 +184,20 @@ async function updateTransaction(req, res) {
     if (req.body?.[key] === undefined) continue;
 
     if (
-      ['nome', 'email', 'tipo', 'modalidade', 'fiador_nome', 'fiador_telefone', 'fiador_code', 'observacoes', 'status'].includes(
+      [
+        'nome',
+        'email',
+        'tipo',
+        'modalidade',
+        'fiador_nome',
+        'fiador_telefone',
+        'cpf',
+        'cep',
+        'endereco',
+        'fiador_code',
+        'observacoes',
+        'status',
+      ].includes(
         key
       )
     ) {
