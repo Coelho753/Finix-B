@@ -43,6 +43,7 @@ async function fetchUserById(userId) {
   return User.findById(userId);
 }
 
+// ================= REGISTER =================
 async function register(req, res) {
   try {
     const cleanName = sanitizeInput(req.body?.name);
@@ -90,6 +91,7 @@ async function register(req, res) {
   }
 }
 
+// ================= LOGIN =================
 async function login(req, res) {
   try {
     const email = sanitizeInput(req.body?.email || '').toLowerCase();
@@ -131,10 +133,12 @@ async function getMe(req, res) {
   }
 }
 
+// ================= LOGOUT =================
 async function logout(req, res) {
-  return res.status(200).json({ message: 'Logout realizado com sucesso', success: true });
+  return res.json({ message: 'Logout realizado com sucesso' });
 }
 
+// ================= FORGOT PASSWORD =================
 async function forgotPassword(req, res) {
   try {
     const email = sanitizeInput(req.body?.email || '').toLowerCase();
@@ -253,6 +257,7 @@ async function promoteToSocio(req, res) {
   }
 }
 
+// ================= EXPORT =================
 module.exports = {
   register,
   login,
