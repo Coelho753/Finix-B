@@ -74,20 +74,25 @@ async function createUser(req, res) {
 }
 
 async function updateUser(req, res) {
-  if (!assertAdmin(req, res)) return undefined;
+  const isAdmin = req.user.role === 'admin';
+  const isSelf = String(req.user._id) === String(req.params.id);
+
+  if (!isAdmin && !isSelf) {
+    return res.status(403).json({ message: 'Sem permissão' });
+  }
 
   const updates = {};
   if (req.body?.name !== undefined) updates.name = sanitizeInput(req.body.name);
   if (req.body?.email !== undefined) updates.email = sanitizeInput(req.body.email).toLowerCase();
-  if (req.body?.role !== undefined) updates.role = sanitizeInput(req.body.role);
-  if (req.body?.titulo !== undefined) updates.titulo = sanitizeInput(req.body.titulo);
+  if (isAdmin && req.body?.role !== undefined) updates.role = sanitizeInput(req.body.role);
+  if (isAdmin && req.body?.titulo !== undefined) updates.titulo = sanitizeInput(req.body.titulo);
   if (req.body?.telefone !== undefined) updates.telefone = sanitizeInput(req.body.telefone);
   if (req.body?.cpf !== undefined) updates.cpf = sanitizeInput(req.body.cpf);
   if (req.body?.cep !== undefined) updates.cep = sanitizeInput(req.body.cep);
   if (req.body?.endereco !== undefined) updates.endereco = sanitizeInput(req.body.endereco);
   if (req.body?.password) updates.passwordHash = await hashPassword(sanitizeInput(req.body.password));
 
-  if (updates.role && !['terceiro', 'socio', 'admin'].includes(updates.role)) {
+  if (isAdmin && updates.role && !['terceiro', 'socio', 'admin'].includes(updates.role)) {
     return res.status(400).json({ message: 'Role inválida' });
   }
 
