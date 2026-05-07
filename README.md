@@ -83,25 +83,23 @@ npm start
 - `GET /api/finance/history` (Bearer admin)
 - `GET /api/finance/my-summary` (Bearer sócio)
 
->>>>>>> main
 ## Regras de autenticação
 
 ### Cadastro (`POST /api/auth/register`)
-Aceita payload com e retorna `{ user: { id, email, name, role }, token }`:
+Aceita payload e retorna `{ user: { id, email, name, role }, token }`:
 
 ```json
 {
   "name": "Nome",
   "email": "email@finix.com",
   "password": "Senha@123",
-  "role": "terceiro | socio",
-  "membershipCode": "FINIX75345609"
+  "role": "admin | socio | terceiro"
 }
 ```
 
 - Senha obrigatoriamente com: maiúscula, minúscula, número, caractere especial e mínimo de 8 caracteres.
 - Inputs passam por sanitização removendo: `< > " ' ; ( ) { }`.
-- Para `role: "socio"`, o `membershipCode` deve ser `FINIX75345609`.
+- Não há necessidade de `membershipCode` para cadastro.
 
 ### Admin padrão
 Ao iniciar o servidor, caso não exista admin com `admin@finix.com`, é criado automaticamente com senha `#75345609Ef`.
