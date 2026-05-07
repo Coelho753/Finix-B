@@ -1,5 +1,29 @@
+const mongoose = require('mongoose');
 const PaymentNotification = require('../models/PaymentNotification');
+const User = require('../models/User');
 const { sanitizeInput } = require('../services/authService');
+
+async function resolveNotificationUser(req) {
+  const requestedUserId =
+    req.user.role === 'admin'
+      ? req.body?.user_id || req.body?.userId || req.body?.socio_id || req.body?.socioId || req.user._id
+      : req.user._id;
+
+  if (!mongoose.isValidObjectId(requestedUserId)) {
+    return { error: 'Usuário inválido para a notificação' };
+  }
+
+  const user = await User.findById(requestedUserId).select('name role');
+  if (!user) {
+    return { error: 'Usuário da notificação não encontrado' };
+  }
+
+  if (user.role !== 'socio') {
+    return { error: 'Notificações de pagamento são permitidas apenas para sócios' };
+  }
+
+  return { user };
+}
 
 async function createPaymentNotification(req, res) {
   const mesReferencia = sanitizeInput(req.body?.mes_referencia);
@@ -13,9 +37,14 @@ async function createPaymentNotification(req, res) {
     return res.status(400).json({ message: 'Mês de referência e valor válido são obrigatórios' });
   }
 
+  const { user, error } = await resolveNotificationUser(req);
+  if (error) {
+    return res.status(400).json({ message: error });
+  }
+
   const notification = await PaymentNotification.create({
-    user_id: req.user._id,
-    user_name: req.user.name,
+    user_id: user._id,
+    user_name: user.name,
     mes_referencia: mesReferencia,
     valor,
     mensagem,
