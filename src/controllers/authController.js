@@ -50,6 +50,7 @@ async function register(req, res) {
     const cleanEmail = sanitizeInput(req.body?.email);
     const cleanPassword = sanitizeInput(req.body?.password);
     const cleanRole = sanitizeInput(req.body?.role);
+    const cleanTelefone = sanitizeInput(req.body?.telefone || req.body?.phone || req.body?.whatsapp || '');
 
     if (!cleanName || !cleanEmail || !cleanPassword) {
       return res.status(400).json({ message: 'Nome, e-mail e senha são obrigatórios' });
@@ -77,6 +78,7 @@ async function register(req, res) {
       name: cleanName,
       email,
       role: normalizedRole,
+      telefone: cleanTelefone,
       passwordHash: await hashPassword(cleanPassword),
     });
 
